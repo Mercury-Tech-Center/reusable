@@ -1,0 +1,52 @@
+name: ECS Deploy
+
+on:
+  workflow_call:
+    inputs:
+      project-name:
+        required: true
+        type: string
+      ecr-repository:
+        required: true
+        type: string
+      ecs-service:
+        required: true
+        type: string
+      ecs-cluster:
+        required: true
+        type: string
+      image-tag:
+        required: true
+        type: string
+    secrets:
+      PAT:
+        required: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.PAT }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets['${{ inputs.project-name }}_AWS_ACCESS_KEY_ID'] }}
+          aws-secret-access-key: ${{ secrets['${{ inputs.project-name }}_AWS_SECRET_ACCESS_KEY'] }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, tag, and push Docker image to Amazon ECR
+        run: |
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ inputs.ecr-repository }}:${{ inputs.image-tag }} . --build-arg somearg=1
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ inputs.ecr-repository }}:${{ inputs.image-tag }}
+
+      - name: Force new deployment in ECS
+        run: |
+          aws ecs update-service --cluster ${{ inputs.ecs-cluster }} --service ${{ inputs.ecs-service }} --force-new-deployment
