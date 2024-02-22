@@ -18,11 +18,6 @@ on:
       image-tag:
         required: true
         type: string
-    secrets:
-        AWS_ACCESS_KEY_ID:
-          required: true
-        AWS_SECRET_ACCESS_KEY:
-          required: true
           
 jobs:
   build-and-deploy:
@@ -34,8 +29,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key-id: ${{ secrets['${{ inputs.project-name }}_AWS_ACCESS_KEY_ID'] }}
-          aws-secret-access-key: ${{ secrets['${{ inputs.project-name }}_AWS_SECRET_ACCESS_KEY'] }}
+          aws-access-key-id: ${{ secrets[format('{0}_AWS_ACCESS_KEY_ID', inputs.project-name)] }}
+          aws-secret-access-key: ${{ secrets[format('{0}_AWS_SECRET_ACCESS_KEY', inputs.project-name)] }}
           aws-region: eu-central-1
           
       - name: Login to Amazon ECR
