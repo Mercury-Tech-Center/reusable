@@ -12,9 +12,6 @@ on:
       brand-name:
         required: true
         type: string
-      build-args:
-        required: false
-        type: string
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -75,8 +72,8 @@ jobs:
 
         run: |
           BUILD_ARGS=""
-          if [ -n "${{ inputs.build-args }}" ]; then
-            echo ${{ inputs.build-args }} | jq -r 'to_entries[] | "--build-arg \(.key)=\(.value)"' | while read arg; do
+          if [ -n "${{ secrets.build-args }}" ]; then
+            echo ${{ secrets.build-args }} | jq -r 'to_entries[] | "--build-arg \(.key)=\(.value)"' | while read arg; do
               BUILD_ARGS="$BUILD_ARGS $arg"
             done
           fi
