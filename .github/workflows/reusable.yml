@@ -14,7 +14,7 @@ on:
         type: string
       build-envs:
         required: false
-        type: json
+        type: string
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
