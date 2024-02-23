@@ -3,19 +3,13 @@ name: ECS Deploy
 on:
   workflow_call:
     inputs:
-      project-name:
+      branch-name:
         required: true
         type: string
-      ecr-repository:
+      repository-name:
         required: true
         type: string
-      ecs-service:
-        required: true
-        type: string
-      ecs-cluster:
-        required: true
-        type: string
-      image-tag:
+      brand-name:
         required: true
         type: string
     secrets:
@@ -30,6 +24,36 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Set environment variables dynamically
+        run: |
+          BRANCH_NAME="${{ inputs.branch-name }}"
+          REPOSITORY_NAME="${{ inputs.repository-name }}"
+          BRAND_NAME="${{ inputs.brand-name }}"
+          case "$BRANCH_NAME" in
+            "dev")
+              ENV="dev"
+              CLUSTER_SUFFIX="dev"
+              ;;
+            "staging")
+              ENV="staging"
+              CLUSTER_SUFFIX="staging"
+              ;;
+            "main")
+              ENV="prod"
+              CLUSTER_SUFFIX="prod"
+              ;;
+            *)
+              echo "Unknown branch name: $BRANCH_NAME"
+              exit 1
+              ;;
+          esac
+          CLUSTER_NAME="scr-${CLUSTER_SUFFIX}-cluster"
+          SERVICE_NAME="scr-${CLUSTER_SUFFIX}-${REPOSITORY_NAME}"
+
+          echo "ENV=$ENV" >> $GITHUB_ENV
+          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
+          echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -43,9 +67,9 @@ jobs:
 
       - name: Build, tag, and push Docker image to Amazon ECR
         run: |
-          docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ inputs.ecr-repository }}:${{ inputs.image-tag }} . --build-arg somearg=1
-          docker push ${{ steps.login-ecr.outputs.registry }}/${{ inputs.ecr-repository }}:${{ inputs.image-tag }}
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/${REPOSITORY_NAME}:${BRANCH_NAME} . --build-arg somearg=1
+          docker push ${{ steps.login-ecr.outputs.registry }}/${REPOSITORY_NAME}:${BRANCH_NAME}
 
       - name: Force new deployment in ECS
         run: |
-          aws ecs update-service --cluster ${{ inputs.ecs-cluster }} --service ${{ inputs.ecs-service }} --force-new-deployment
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
