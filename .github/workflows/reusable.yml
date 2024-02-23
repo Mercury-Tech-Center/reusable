@@ -71,10 +71,11 @@ jobs:
       - name: Build, tag, and push Docker image to Amazon ECR
 
         run: |
+          BUILD_ARGS=""
           if [ -n "${{ inputs.build-args }}" ]; then
-            BUILD_ARGS="--build-arg ${{ inputs.build-args }}"
-          else
-            BUILD_ARGS=""
+            for arg in ${{ inputs.build-args }}; do
+              BUILD_ARGS="$BUILD_ARGS --build-arg $arg"
+            done
           fi
           docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest $BUILD_ARGS .
           docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
