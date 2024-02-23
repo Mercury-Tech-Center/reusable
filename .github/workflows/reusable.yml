@@ -83,6 +83,7 @@ jobs:
             done
           fi
           docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest $BUILD_ENVS --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} .
+          echo "docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest $BUILD_ENVS --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} ."
           docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
 
       - name: Force new deployment in ECS
