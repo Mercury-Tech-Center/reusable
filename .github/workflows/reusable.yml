@@ -74,8 +74,8 @@ jobs:
 
         run: |
           BUILD_ARGS=""
-          if [ -n "${{ input.build-args }}" ]; then
-            echo ${{ input.build-args }} | jq -r 'to_entries[] | "--build-arg \(.key)=\(.value)"' | while read arg; do
+          if [ -n "${{ inputs.build-args }}" ]; then
+            echo ${{ inputs.build-args }} | jq -r 'to_entries[] | "--build-arg \(.key)=\(.value)"' | while read arg; do
               BUILD_ARGS="$BUILD_ARGS $arg"
             done
           fi
