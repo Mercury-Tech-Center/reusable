@@ -12,6 +12,9 @@ on:
       brand-name:
         required: true
         type: string
+      build-args:
+        required: true
+        type: string
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
