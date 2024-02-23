@@ -17,7 +17,9 @@ on:
         required: true
       AWS_SECRET_ACCESS_KEY:
         required: true
-      build-args:
+      NPM_TOKEN:
+        required: false
+      NPM_REGISTRY:
         required: false
         
 jobs:
@@ -72,12 +74,12 @@ jobs:
 
         run: |
           BUILD_ARGS=""
-          if [ -n "${{ secrets.build-args }}" ]; then
-            echo ${{ secrets.build-args }} | jq -r 'to_entries[] | "--build-arg \(.key)=\(.value)"' | while read arg; do
+          if [ -n "${{ input.build-args }}" ]; then
+            echo ${{ input.build-args }} | jq -r 'to_entries[] | "--build-arg \(.key)=\(.value)"' | while read arg; do
               BUILD_ARGS="$BUILD_ARGS $arg"
             done
           fi
-          docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest $BUILD_ARGS .
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest $BUILD_ARGS --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} .
           docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
 
       - name: Force new deployment in ECS
