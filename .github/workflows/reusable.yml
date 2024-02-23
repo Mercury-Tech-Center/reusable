@@ -14,7 +14,7 @@ on:
         type: string
       build-envs:
         required: false
-        type: string
+        type: json
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -76,19 +76,19 @@ jobs:
       - name: Build, tag, and push Docker image to Amazon ECR
         
         run: |
-          BUILD_ARGS=""
-          for var in $(echo ${{ inputs.build-envs }} | jq -r 'to_entries[] | "\(.key)=\(.value)"'); do
-            BUILD_ARGS="$BUILD_ARGS --build-arg $var"
-          done
-          docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest $BUILD_ARGS \
+
+          BUILD_ENVS=""
+          json_string = ${{ inputs.build-envs }}
+          if [ -n "$json_string" ]; then
+            echo "$json_string" | jq -r 'to_entries[] | "--build-arg \(.key)=\(.value)"' | while read arg; do
+              BUILD_ENVS="$BUILD_ENVS $arg"
+            done
+          fi
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest $BUILD_ENVS \
             --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} \
             --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} .
           docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
 
-          
-          docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest $BUILD_ENVS --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} .
-          echo "docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest $BUILD_ENVS --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} ."
-          docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
 
       - name: Force new deployment in ECS
         run: |
