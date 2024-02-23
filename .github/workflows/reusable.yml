@@ -79,7 +79,7 @@ jobs:
           BUILD_ENVS=""
           if [ -n "${{ inputs.build-envs }}" ]; then
             echo ${{ inputs.build-envs }} | jq -r 'to_entries[] | "--build-arg \(.key)=\(.value)"' | while read arg; do
-              --build-arg="$BUILD_ENVS $arg"
+              BUILD_ENVS="$BUILD_ENVS $arg"
             done
           fi
           docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest $BUILD_ENVS --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} .
