@@ -73,8 +73,8 @@ jobs:
         run: |
           BUILD_ARGS=""
           if [ -n "${{ inputs.build-args }}" ]; then
-            for arg in ${{ inputs.build-args }}; do
-              BUILD_ARGS="$BUILD_ARGS --build-arg $arg"
+            echo ${{ inputs.build-args }} | jq -r 'to_entries[] | "--build-arg \(.key)=\(.value)"' | while read arg; do
+              BUILD_ARGS="$BUILD_ARGS $arg"
             done
           fi
           docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest $BUILD_ARGS .
