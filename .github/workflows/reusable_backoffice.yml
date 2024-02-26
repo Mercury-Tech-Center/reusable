@@ -85,6 +85,7 @@ jobs:
             --build-arg REACT_APP_VEHICLES_SOCKET_PROXY="https://api.${DOMAIN_SUFFIX}.scroll.codes/backofficeLive" \
             --build-arg REACT_APP_CUSTOMER_MANAGEMENT_API_PROXY_URL="https://api.${DOMAIN_SUFFIX}.scroll.codes/customersManage" \
             --build-arg REACT_APP_BRANCHES_VEHICLES_API_PROXY_URL="https://api.${DOMAIN_SUFFIX}.scroll.codes/vehiclesApi" \
+            --build-arg REACT_APP_VEHICLES_SOCKET_PROXY="https://api.${DOMAIN_SUFFIX}.scroll.codes/backofficeLive" \
             --build-arg REACT_APP_VEHICLES_RENTALS_API_PROXY_URL="https://api.${DOMAIN_SUFFIX}.scroll.codes/rentalsApi" .
             
           docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
