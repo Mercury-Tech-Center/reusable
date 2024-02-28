@@ -70,9 +70,10 @@ jobs:
       - name: Build, tag, and push Docker image to Amazon ECR
         
         run: |
-          docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest .
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest \
+            --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} \
+            --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} .
           docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
-
 
       - name: Force new deployment in ECS
         run: |
