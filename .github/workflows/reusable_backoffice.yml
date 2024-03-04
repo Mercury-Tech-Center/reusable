@@ -44,11 +44,15 @@ jobs:
               DOMAIN_SUFFIX="dev"
               ;;
             "staging")
+              PUBLIC_KEY=${{ secrets.SCROLL_STAGING_PUBLIC_KEY }}
+              PRIVATE_KEY=${{ secrets.SCROLL_STAGING_PRIVATE_KEY }}
               ENV="staging"
               CLUSTER_SUFFIX="staging"
               DOMAIN_SUFFIX="staging"
               ;;
             "main")
+              PUBLIC_KEY=${{ secrets.SCROLL_PROD_PUBLIC_KEY }}
+              PRIVATE_KEY=${{ secrets.SCROLL_PROD_PRIVATE_KEY }}
               ENV="prod"
               DOMAIN_SUFFIX="app"
               CLUSTER_SUFFIX="prod"
@@ -86,6 +90,8 @@ jobs:
             --build-arg REACT_APP_BRANCHES_VEHICLES_API_PROXY_URL="https://api.${DOMAIN_SUFFIX}.scroll.codes/vehiclesApi" \
             --build-arg REACT_APP_VEHICLES_SOCKET_PROXY="https://ws.${DOMAIN_SUFFIX}.scroll.codes:8006" \
             --build-arg REACT_APP_AUTHORIZATION_API_PROXY_URL="https://sso.staging.tcenter.cloud" \
+            --build-arg REACT_APP_API_PUBLIC_KEY="${PUBLIC_KEY}" \
+            --build-arg REACT_APP_API_PRIVATE_KEY="${PRIVATE_KEY}" \
             --build-arg REACT_APP_VEHICLES_RENTALS_API_PROXY_URL="https://api.${DOMAIN_SUFFIX}.scroll.codes/rentalsApi" .
             
           docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
