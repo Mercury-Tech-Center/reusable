@@ -57,4 +57,5 @@ jobs:
       - name: Update ECS Service
         run: |
           CLUSTER_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-cluster"
+          SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${{ inputs.repo_name }}"
           aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
