@@ -83,6 +83,15 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+      - name: Build and Push Docker Images for Monorepo
+        if: ${{ inputs.is_monorepo }}
+        run: |
+          for app in ${{ inputs.apps }}; do
+            export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
+            export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-cluster
+            aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+          done
+          
       - name: Deploy to ECS
         env:
           ECS_SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-${{ inputs.github_repo }}
