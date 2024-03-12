@@ -6,6 +6,12 @@ on:
       brand_name:
         required: true
         type: string
+      repo_name:
+        required: true
+        type: string
+      branch_name:
+        required: true
+        type: string
       is_mono_repo:
         required: true
         type: string
@@ -23,6 +29,7 @@ on:
       AWS_REGION:
         required: true
 
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -39,10 +46,13 @@ jobs:
 
       - name: Build and Push Docker image for each service
         run: |
-          BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)
-          for SERVICE in ${{ inputs.is_mono_repo }}; do
-            IMAGE_TAG="${{ inputs.brand_name }}-${BRANCH_NAME}-${SERVICE}"
-            docker build -t $IMAGE_TAG --build-arg APP_NAME=$SERVICE ./services/$SERVICE
+          if [ "${{ inputs.is_mono_repo }}" != "false" ]; then
+            APP_NAME="${{ inputs.is_mono_repo }}"
+          else
+            APP_NAME="${{ inputs.repo_name }}"
+          fi
+          IMAGE_TAG="${{ inputs.brand_name }}-${{ inputs.branch_name }}-${APP_NAME}"
+          docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME .
             # Push the Docker image to your container registry here
           done
 
