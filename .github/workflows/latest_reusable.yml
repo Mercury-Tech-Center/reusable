@@ -12,6 +12,9 @@ on:
       branch_name:
         required: false
         type: string
+      is_mono_repo:
+        required: false
+        type: boolean
       mono_repo_apps:
         required: false
         type: string
@@ -47,11 +50,11 @@ jobs:
       - name: Build and Push Docker image
         run: |
           BRANCH_NAME="${{ inputs.branch_name }}"
-          if [ "${{ inputs.is_mono_repo }}" == "true" ]; then
+          if [[ "${{ inputs.is_mono_repo }}" == "true" && -n "${{ inputs.mono_repo_apps }}" ]]; then
             IFS=',' read -ra APPS <<< "${{ inputs.mono_repo_apps }}"
             for APP_NAME in "${APPS[@]}"; do
               IMAGE_TAG="${{ inputs.brand_name }}-${BRANCH_NAME}-${APP_NAME}"
-              docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME ./path/to/$APP_NAME
+              docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME ./services/$APP_NAME
               # Push the Docker image to your container registry here
             done
           else
