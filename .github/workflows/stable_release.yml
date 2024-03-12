@@ -13,6 +13,12 @@ on:
         required: false
         type: string
         default: ""
+      github_repo:
+        required: true
+        type: string
+      github_branch:
+        required: true
+        type: string
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -36,18 +42,16 @@ jobs:
 
       - name: Log in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v1
-        with:
-          registry-type: private
 
       - name: Build, tag, and push image to Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECS_SERVICE_NAME: ${{ inputs.ecs_cluster_name }}-${{ github.event.repository.name }}-${{ github.repository }}
-          ECS_CLUSTER_NAME: '${{ inputs.ecs_cluster_name }}-${{ github.event.repository.name }}-cluster'
           IMAGE_TAG: latest
+          SERVICE_NAME: ${{ inputs.ecs_cluster_name }}-${{ inputs.github_branch }}-${{ inputs.github_repo }}
         run: |
-          docker build ${{ inputs.build_args }} -t $ECR_REGISTRY/$ECS_SERVICE_NAME:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECS_SERVICE_NAME:$IMAGE_TAG
+          echo "Service Name: $SERVICE_NAME"
+          docker build ${{ inputs.build_args }} -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
 
   deploy:
     name: Deploy to ECS
@@ -56,7 +60,6 @@ jobs:
     steps:
       - name: Deploy to ECS
         env:
-          ECS_SERVICE_NAME: ${{ inputs.ecs_cluster_name }}-${{ github.event.repository.name }}-${{ github.repository }}
-          ECS_CLUSTER_NAME: '${{ inputs.ecs_cluster_name }}-${{ github.event.repository.name }}-cluster'
+          ECS_SERVICE_NAME: ${{ inputs.ecs_cluster_name }}-${{ inputs.github_branch }}-${{ inputs.github_repo }}
         run: |
-          aws ecs update-service --cluster $ECS_CLUSTER_NAME --service $ECS_SERVICE_NAME --force-new-deployment
+          aws ecs update-service --cluster ${{ inputs.ecs_cluster_name }} --service $ECS_SERVICE_NAME --force-new-deployment
