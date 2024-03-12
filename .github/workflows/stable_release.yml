@@ -103,7 +103,7 @@ jobs:
           done
           
       - name: Deploy to ECS
-        if: ${{ inputs.is_monorepo }}
+        if: ${{ !inputs.is_monorepo }}
         env:
           SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-${{ inputs.github_repo }}
           CLUSTER_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-cluster
