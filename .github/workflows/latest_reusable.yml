@@ -1,34 +1,26 @@
-# .github/workflows/build-and-deploy.yml
-name: Build and Deploy Workflow
+name: Deploy
 
 on:
   workflow_call:
     inputs:
-      repo_name:
+      brand_name:
         required: true
         type: string
-      branch_name:
-        required: true
-        type: string
-      cluster_name:
-        required: true
-        type: string
-      use_build_args:
-        required: false
-        type: boolean
-        default: false
       is_mono_repo:
-        required: false
+        required: true
+        type: string
+      is_env:
+        required: true
         type: boolean
-        default: false
-    secrets:
-      aws_access_key_id:
-        required: true
-      aws_secret_access_key:
-        required: true
-      dynamic_build_args:
+      environment_variables:
         required: false
-      ecr_repository:
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_REGION:
         required: true
 
 jobs:
@@ -36,46 +28,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key-id: ${{ secrets.aws_access_key_id }}
-          aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
-          aws-region: 'eu-central-1'
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
-      - name: Set SERVICE_NAME and Build Arguments
-        id: set_service_name_and_build_args
+      - name: Build and Push Docker image for each service
         run: |
-          if [ "${{ inputs.is_mono_repo }}" = "true" ]; then
-            APP_NAME=$(echo "${{ secrets.dynamic_build_args }}" | cut -d ' ' -f1 | cut -d '=' -f2 | tr '[:upper:]' '[:lower:]')
-            SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${APP_NAME}"
-          else
-            SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${{ inputs.repo_name }}"
-          fi
-          echo "SERVICE_NAME=${SERVICE_NAME}" >> $GITHUB_ENV
-          if [ "${{ inputs.use_build_args }}" = "true" ] && [ -n "${{ secrets.dynamic_build_args }}" ]; then
-            echo "BUILD_ARGS=${{ secrets.dynamic_build_args }}" >> $GITHUB_ENV
-          else
-            echo "BUILD_ARGS=" >> $GITHUB_ENV
-          fi
+          BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)
+          for SERVICE in ${{ inputs.is_mono_repo }}; do
+            IMAGE_TAG="${{ inputs.brand_name }}-${BRANCH_NAME}-${SERVICE}"
+            docker build -t $IMAGE_TAG --build-arg APP_NAME=$SERVICE ./services/$SERVICE
+            # Push the Docker image to your container registry here
+          done
 
-      - name: Build and Push Docker image
+      - name: Update ECS service for each service
+        if: ${{ inputs.is_env }}
         run: |
-          IMAGE_URI="${{ secrets.ecr_repository }}/${SERVICE_NAME}:latest"
-          if [ -n "$BUILD_ARGS" ]; then
-            docker build $BUILD_ARGS -t $IMAGE_URI .
-          else
-            docker build -t $IMAGE_URI .
-          fi
-          docker push $IMAGE_URI
-
-      - name: Update ECS Service
-        run: |
-          CLUSTER_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-cluster"
-          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+          BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)
+          for SERVICE in ${{ inputs.is_mono_repo }}; do
+            SERVICE_NAME="${{ inputs.brand_name }}-${BRANCH_NAME}-${SERVICE}"
+            # Update the ECS service with the new image and environment variables
+            # Use ${{ inputs.environment_variables }} for the environment variables
+          done
