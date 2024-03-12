@@ -16,6 +16,10 @@ on:
         required: false
         type: boolean
         default: false
+      is_mono_repo:
+        required: false
+        type: boolean
+        default: false
     secrets:
       aws_access_key_id:
         required: true
@@ -31,7 +35,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -43,9 +46,18 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
+      - name: Set SERVICE_NAME
+        id: set_service_name
+        run: |
+          if [ "${{ inputs.is_mono_repo }}" = "true" ]; then
+            APP_NAME=$(echo "${{ secrets.dynamic_build_args }}" | cut -d ' ' -f1 | cut -d '=' -f2)
+            echo "SERVICE_NAME=${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${APP_NAME}" >> $GITHUB_ENV
+          else
+            echo "SERVICE_NAME=${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${{ inputs.repo_name }}" >> $GITHUB_ENV
+          fi
+
       - name: Build and Push Docker image
         run: |
-          SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${{ inputs.repo_name }}"
           IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest"
           if [ "${{ inputs.use_build_args }}" = "true" ] && [ -n "${{ secrets.dynamic_build_args }}" ]; then
             docker build ${{ secrets.dynamic_build_args }} -t $IMAGE_URI .
@@ -57,5 +69,4 @@ jobs:
       - name: Update ECS Service
         run: |
           CLUSTER_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-cluster"
-          SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${{ inputs.repo_name }}"
           aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
