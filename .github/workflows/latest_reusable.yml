@@ -1,77 +1,65 @@
-name: Deploy to AWS ECS
+name: Reusable Workflow with Conditional Build Args
 
 on:
   workflow_call:
     inputs:
-      brand_name:
-        required: false
-        type: string
       repo_name:
-        required: false
+        required: true
         type: string
       branch_name:
-        required: false
+        required: true
         type: string
+      cluster_name:
+        required: true
+        type: string
+      use_build_args:
+        required: false
+        type: boolean
+        default: false
       is_mono_repo:
         required: false
         type: boolean
-      mono_repo_apps:
-        required: false
-        type: string
-        description: 'Comma-separated list of mono-repo application names'
-      is_env:
-        required: false
-        type: boolean
-      environment_variables:
-        required: false
-        type: string
+        default: false
     secrets:
-      AWS_ACCESS_KEY_ID:
+      aws_access_key_id:
         required: true
-      AWS_SECRET_ACCESS_KEY:
+      aws_secret_access_key:
         required: true
-      AWS_REGION:
-        required: true
+      dynamic_build_args:
+        required: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
 
-      - name: Configure AWS credentials
+
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-      
+          aws-access-key-id: ${{ secrets.aws_access_key_id }}
+          aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
+          aws-region: 'eu-central-1'
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
       - name: Build and Push Docker image
         run: |
-          BRANCH_NAME="${{ inputs.branch_name }}"
-          if [[ "${{ inputs.is_mono_repo }}" == "true" && -n "${{ inputs.mono_repo_apps }}" ]]; then
-            IFS=',' read -ra APPS <<< "${{ inputs.mono_repo_apps }}"
-            for APP_NAME in "${APPS[@]}"; do
-              IMAGE_TAG="${{ inputs.brand_name }}-${BRANCH_NAME}-${APP_NAME}"
-              docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME .
-              # Push the Docker image to your container registry here
-            done
+          SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${{ inputs.repo_name }}"
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest"
+          if [ "${{ inputs.use_build_args }}" = "true" ] && [ -n "${{ secrets.dynamic_build_args }}" ]; then
+            docker build ${{ secrets.dynamic_build_args }} -t $IMAGE_URI .
           else
-            APP_NAME="${{ inputs.repo_name }}"
-            IMAGE_TAG="${{ inputs.brand_name }}-${BRANCH_NAME}-${APP_NAME}"
-            docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME .
-            # Push the Docker image to your container registry here
+            docker build -t $IMAGE_URI .
           fi
+          docker push $IMAGE_URI
 
-
-      - name: Update ECS service
-        if: ${{ inputs.is_env }}
+      - name: Update ECS Service
         run: |
-          if [ "${{ inputs.is_mono_repo }}" != "false" ]; then
-            SERVICE_NAME="${{ inputs.brand_name }}-${{ inputs.branch_name }}-${{ inputs.is_mono_repo }}"
-          else
-            SERVICE_NAME="${{ inputs.brand_name }}-${{ inputs.branch_name }}-${APP_NAME}"
-          fi
-          # Update the ECS service with the new image and environment variables
-          # Use ${{ inputs.environment_variables }} for the environment variables
+          CLUSTER_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-cluster"
+          SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${{ inputs.repo_name }}"
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
