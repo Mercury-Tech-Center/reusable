@@ -48,6 +48,8 @@ jobs:
 
       - name: Log in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v1
+      - name: Print ECR registry URL
+        run: echo ${{ steps.login-ecr.outputs.registry }}
 
       - name: Build and Push Docker Images for Monorepo
         if: ${{ inputs.is_monorepo }}
