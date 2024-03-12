@@ -57,7 +57,7 @@ jobs:
         run: |
           for app in ${{ inputs.apps }}; do
             export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
-            docker build -t ${{ steps.login-ecr.outputs.registry }}/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=$app
+            docker build -t ${{ steps.login-ecr.outputs.registry }}123123/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=$app
             docker push ${{ steps.login-ecr.outputs.registry }}/$SERVICE_NAME:$IMAGE_TAG
           done
           
