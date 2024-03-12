@@ -1,4 +1,5 @@
-name: Reusable Workflow with Conditional Build Args
+# .github/workflows/build-and-deploy.yml
+name: Build and Deploy Workflow
 
 on:
   workflow_call:
@@ -27,6 +28,8 @@ on:
         required: true
       dynamic_build_args:
         required: false
+      ecr_repository:
+        required: true
 
 jobs:
   deploy:
@@ -52,18 +55,20 @@ jobs:
           if [ "${{ inputs.is_mono_repo }}" = "true" ]; then
             APP_NAME=$(echo "${{ secrets.dynamic_build_args }}" | cut -d ' ' -f1 | cut -d '=' -f2 | tr '[:upper:]' '[:lower:]')
             SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${APP_NAME}"
-            BUILD_ARGS="${{ secrets.dynamic_build_args }}"
           else
             SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${{ inputs.repo_name }}"
-            BUILD_ARGS=""
           fi
-          echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
-          echo "BUILD_ARGS=$BUILD_ARGS" >> $GITHUB_ENV
+          echo "SERVICE_NAME=${SERVICE_NAME}" >> $GITHUB_ENV
+          if [ "${{ inputs.use_build_args }}" = "true" ] && [ -n "${{ secrets.dynamic_build_args }}" ]; then
+            echo "BUILD_ARGS=${{ secrets.dynamic_build_args }}" >> $GITHUB_ENV
+          else
+            echo "BUILD_ARGS=" >> $GITHUB_ENV
+          fi
 
       - name: Build and Push Docker image
         run: |
-          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest"
-          if [ "${{ inputs.use_build_args }}" = "true" ] && [ -n "$BUILD_ARGS" ]; then
+          IMAGE_URI="${{ secrets.ecr_repository }}/${SERVICE_NAME}:latest"
+          if [ -n "$BUILD_ARGS" ]; then
             docker build $BUILD_ARGS -t $IMAGE_URI .
           else
             docker build -t $IMAGE_URI .
