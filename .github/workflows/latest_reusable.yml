@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy to AWS ECS
 
 on:
   workflow_call:
@@ -29,7 +29,6 @@ on:
       AWS_REGION:
         required: true
 
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -44,7 +43,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Build and Push Docker image for each service
+      - name: Build and Push Docker image
         run: |
           if [ "${{ inputs.is_mono_repo }}" != "false" ]; then
             APP_NAME="${{ inputs.is_mono_repo }}"
@@ -53,15 +52,15 @@ jobs:
           fi
           IMAGE_TAG="${{ inputs.brand_name }}-${{ inputs.branch_name }}-${APP_NAME}"
           docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME .
-            # Push the Docker image to your container registry here
-          done
+          # Push the Docker image to your container registry here
 
-      - name: Update ECS service for each service
+      - name: Update ECS service
         if: ${{ inputs.is_env }}
         run: |
-          BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)
-          for SERVICE in ${{ inputs.is_mono_repo }}; do
-            SERVICE_NAME="${{ inputs.brand_name }}-${BRANCH_NAME}-${SERVICE}"
-            # Update the ECS service with the new image and environment variables
-            # Use ${{ inputs.environment_variables }} for the environment variables
-          done
+          if [ "${{ inputs.is_mono_repo }}" != "false" ]; then
+            SERVICE_NAME="${{ inputs.brand_name }}-${{ inputs.branch_name }}-${{ inputs.is_mono_repo }}"
+          else
+            SERVICE_NAME="${{ inputs.brand_name }}-${{ inputs.branch_name }}-${APP_NAME}"
+          fi
+          # Update the ECS service with the new image and environment variables
+          # Use ${{ inputs.environment_variables }} for the environment variables
