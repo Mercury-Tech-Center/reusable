@@ -54,9 +54,9 @@ jobs:
       - name: Build and Push Docker Images for Monorepo
         if: ${{ inputs.is_monorepo }}
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: latest
         run: |
+          ECR_REGISTRY="{account-id}.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
           for app in ${{ inputs.apps }}; do
             export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
             docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=$app
