@@ -46,21 +46,25 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Set SERVICE_NAME
-        id: set_service_name
+      - name: Set SERVICE_NAME and Build Arguments
+        id: set_service_name_and_build_args
         run: |
           if [ "${{ inputs.is_mono_repo }}" = "true" ]; then
-            APP_NAME=$(echo "${{ secrets.dynamic_build_args }}" | cut -d ' ' -f1 | cut -d '=' -f2)
-            echo "SERVICE_NAME=${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${APP_NAME}" >> $GITHUB_ENV
+            APP_NAME=$(echo "${{ secrets.dynamic_build_args }}" | cut -d ' ' -f1 | cut -d '=' -f2 | tr '[:upper:]' '[:lower:]')
+            SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${APP_NAME}"
+            BUILD_ARGS="${{ secrets.dynamic_build_args }}"
           else
-            echo "SERVICE_NAME=${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${{ inputs.repo_name }}" >> $GITHUB_ENV
+            SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${{ inputs.repo_name }}"
+            BUILD_ARGS=""
           fi
+          echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
+          echo "BUILD_ARGS=$BUILD_ARGS" >> $GITHUB_ENV
 
       - name: Build and Push Docker image
         run: |
           IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest"
-          if [ "${{ inputs.use_build_args }}" = "true" ] && [ -n "${{ secrets.dynamic_build_args }}" ]; then
-            docker build ${{ secrets.dynamic_build_args }} -t $IMAGE_URI .
+          if [ "${{ inputs.use_build_args }}" = "true" ] && [ -n "$BUILD_ARGS" ]; then
+            docker build $BUILD_ARGS -t $IMAGE_URI .
           else
             docker build -t $IMAGE_URI .
           fi
