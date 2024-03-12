@@ -3,6 +3,12 @@ name: Reusable ECS Deployment Workflow
 on:
   workflow_call:
     inputs:
+      is_monorepo:
+        required: true
+        type: boolean
+      apps:
+        required: false
+        type: string
       aws_region:
         required: true
         type: string
@@ -43,7 +49,20 @@ jobs:
       - name: Log in to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v1
 
+      - name: Build and Push Docker Images for Monorepo
+        if: ${{ inputs.is_monorepo }}
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: latest
+        run: |
+          for app in ${{ inputs.apps }}; do
+            export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
+            docker build --build-arg=APP_NAME=$app -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG .
+            docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+          done
+          
       - name: Build, tag, and push image to Amazon ECR
+        if: ${{ !inputs.is_monorepo }}
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: latest
