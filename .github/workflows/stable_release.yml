@@ -23,9 +23,6 @@ jobs:
   build-and-push:
     name: Build and push Docker image
     runs-on: ubuntu-latest
-    env:
-      ECS_SERVICE_NAME: ${{ inputs.ecs_cluster_name }}-${{ github.event.repository.name }}-${{ github.repository }}
-      ECS_CLUSTER_NAME: '${{ inputs.ecs_cluster_name }}-${{ github.event.repository.name }}-cluster'
     steps:
       - name: Check out code
         uses: actions/checkout@v2
@@ -45,6 +42,8 @@ jobs:
       - name: Build, tag, and push image to Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECS_SERVICE_NAME: ${{ inputs.ecs_cluster_name }}-${{ github.event.repository.name }}-${{ github.repository }}
+          ECS_CLUSTER_NAME: '${{ inputs.ecs_cluster_name }}-${{ github.event.repository.name }}-cluster'
           IMAGE_TAG: latest
         run: |
           docker build ${{ inputs.build_args }} -t $ECR_REGISTRY/$ECS_SERVICE_NAME:$IMAGE_TAG .
