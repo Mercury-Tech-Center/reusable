@@ -4,19 +4,19 @@ on:
   workflow_call:
     inputs:
       brand_name:
-        required: true
+        required: false
         type: string
       repo_name:
-        required: true
+        required: false
         type: string
       branch_name:
-        required: true
+        required: false
         type: string
       is_mono_repo:
-        required: true
+        required: false
         type: string
       is_env:
-        required: true
+        required: false
         type: boolean
       environment_variables:
         required: false
