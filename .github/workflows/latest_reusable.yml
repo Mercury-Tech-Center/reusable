@@ -12,9 +12,10 @@ on:
       branch_name:
         required: false
         type: string
-      is_mono_repo:
+      mono_repo_apps:
         required: false
         type: string
+        description: 'Comma-separated list of mono-repo application names'
       is_env:
         required: false
         type: boolean
@@ -42,17 +43,24 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-
+      
       - name: Build and Push Docker image
         run: |
-          if [ "${{ inputs.is_mono_repo }}" != "false" ]; then
-            APP_NAME="${{ inputs.is_mono_repo }}"
+          BRANCH_NAME="${{ inputs.branch_name }}"
+          if [ "${{ inputs.is_mono_repo }}" == "true" ]; then
+            IFS=',' read -ra APPS <<< "${{ inputs.mono_repo_apps }}"
+            for APP_NAME in "${APPS[@]}"; do
+              IMAGE_TAG="${{ inputs.brand_name }}-${BRANCH_NAME}-${APP_NAME}"
+              docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME ./path/to/$APP_NAME
+              # Push the Docker image to your container registry here
+            done
           else
             APP_NAME="${{ inputs.repo_name }}"
+            IMAGE_TAG="${{ inputs.brand_name }}-${BRANCH_NAME}-${APP_NAME}"
+            docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME .
+            # Push the Docker image to your container registry here
           fi
-          IMAGE_TAG="${{ inputs.brand_name }}-${{ inputs.branch_name }}-${APP_NAME}"
-          docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME .
-          # Push the Docker image to your container registry here
+
 
       - name: Update ECS service
         if: ${{ inputs.is_env }}
