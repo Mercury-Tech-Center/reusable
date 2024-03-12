@@ -47,7 +47,7 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: latest
-          SERVICE_NAME: ${{ inputs.ecs_cluster_name }}-${{ inputs.github_branch }}-${{ inputs.github_repo }}
+          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-${{ inputs.github_repo }}
         run: |
           echo "Service Name: $SERVICE_NAME"
           docker build ${{ inputs.build_args }} -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG .
@@ -60,6 +60,6 @@ jobs:
     steps:
       - name: Deploy to ECS
         env:
-          ECS_SERVICE_NAME: ${{ inputs.ecs_cluster_name }}-${{ inputs.github_branch }}-${{ inputs.github_repo }}
+          ECS_SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-${{ inputs.github_repo }}
         run: |
           aws ecs update-service --cluster ${{ inputs.ecs_cluster_name }} --service $ECS_SERVICE_NAME --force-new-deployment
