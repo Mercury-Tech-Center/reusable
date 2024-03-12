@@ -75,6 +75,7 @@ jobs:
           SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-${{ inputs.github_repo }}
         run: |
           echo "Service Name: $SERVICE_NAME"
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
           docker build ${{ inputs.build_args }} -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
 
@@ -84,6 +85,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Build and Push Docker Images for Monorepo
+        env:
+          AWS_EC2_METADATA_DISABLED: true
         if: ${{ inputs.is_monorepo }}
         run: |
           for app in ${{ inputs.apps }}; do
