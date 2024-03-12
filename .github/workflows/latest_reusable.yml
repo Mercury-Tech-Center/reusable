@@ -54,7 +54,7 @@ jobs:
             IFS=',' read -ra APPS <<< "${{ inputs.mono_repo_apps }}"
             for APP_NAME in "${APPS[@]}"; do
               IMAGE_TAG="${{ inputs.brand_name }}-${BRANCH_NAME}-${APP_NAME}"
-              docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME ./services/$APP_NAME
+              docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME .
               # Push the Docker image to your container registry here
             done
           else
