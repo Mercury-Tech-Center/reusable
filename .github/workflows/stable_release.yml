@@ -13,7 +13,10 @@ on:
         required: true
         type: string
       is_mono_repo:
-        required: true
+        required: false
+        type: string
+      mono_repo_apps:
+        required: false
         type: string
       is_env:
         required: true
@@ -46,14 +49,11 @@ jobs:
       - name: Build and Push Docker image
         run: |
           BRANCH_NAME="${{ inputs.branch_name }}"
-          if [ "${{ inputs.is_mono_repo }}" != "false" ]; then
-            IFS=';' read -ra SERVICES <<< "${{ inputs.mono_repo_services }}"
-            for SERVICE in "${SERVICES[@]}"; do
-              IFS=':' read -ra SERVICE_INFO <<< "$SERVICE"
-              SERVICE_NAME="${SERVICE_INFO[0]}"
-              SERVICE_ARGS="${SERVICE_INFO[1]}"
-              IMAGE_TAG="${{ inputs.brand_name }}-${BRANCH_NAME}-${SERVICE_NAME}"
-              docker build -t $IMAGE_TAG --build-arg APP_NAME=$SERVICE_NAME ${SERVICE_ARGS//,/ --build-arg } ./app/$SERVICE_NAME
+          if [ "${{ inputs.is_mono_repo }}" == "true" ]; then
+            IFS=',' read -ra APPS <<< "${{ inputs.mono_repo_apps }}"
+            for APP_NAME in "${APPS[@]}"; do
+              IMAGE_TAG="${{ inputs.brand_name }}-${BRANCH_NAME}-${APP_NAME}"
+              docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME ./app/$APP_NAME
               # Push the Docker image to your container registry here
             done
           else
@@ -62,6 +62,7 @@ jobs:
             docker build -t $IMAGE_TAG --build-arg APP_NAME=$APP_NAME .
             # Push the Docker image to your container registry here
           fi
+
 
 
       - name: Update ECS service
