@@ -54,7 +54,7 @@ jobs:
     steps:
       - name: Deploy to ECS
         env:
-          ECS_SERVICE_NAME: ${{ inputs.ecs_cluster_name }}-${{ github.ref_name }}-${{ github.repository }}
-          ECS_CLUSTER_NAME: '${{ inputs.ecs_cluster_name }}-${{ github.ref_name }}-cluster'
+          ECS_SERVICE_NAME: ${{ inputs.ecs_cluster_name }}-${{ github.event.repository.name }}-${{ github.repository }}
+          ECS_CLUSTER_NAME: '${{ inputs.ecs_cluster_name }}-${{ github.event.repository.name }}-cluster'
         run: |
           aws ecs update-service --cluster $ECS_CLUSTER_NAME --service $ECS_SERVICE_NAME --force-new-deployment
