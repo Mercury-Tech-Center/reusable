@@ -49,7 +49,12 @@ jobs:
               ENV="staging"
               CLUSTER_SUFFIX="staging"
               DOMAIN_SUFFIX="staging"
-              
+              TCENTER_PAY="https://payments.staging.tcenter.cloud"
+              TCENTER_SSO="https://sso.staging.tcenter.cloud"
+              PRIVATE_KEY="3cca83ec-737f-426c-a99b-2675551c9a98"
+              PUBLIC_KEY="67fd6192-f277-4a82-b626-3706212ae8eb"
+              APP_PRIVATE="30b8e3d7-a571-4550-b91f-06ce8a6bbb0b"
+              APP_PUBLIC="c9c5a0d7-8ea1-40b9-a3ab-5da9bd23c9f1"
               ;;
             "main")
               PUBLIC_KEY=${{ secrets.SCROLL_PROD_PUBLIC_KEY }}
@@ -57,6 +62,12 @@ jobs:
               ENV="prod"
               DOMAIN_SUFFIX="app"
               CLUSTER_SUFFIX="prod"
+              TCENTER_PAY="https://payments.tcenter.cloud"
+              TCENTER_SSO="https://sso.tcenter.cloud"
+              PRIVATE_KEY="661cd8a7-aa43-4887-b840-9a039bf5dd5a"
+              PUBLIC_KEY="c5774b8b-6c03-40ff-a1e8-c477d7010ade"
+              APP_PRIVATE="ab0348be-f179-4e48-83f8-a4b6e45e03ac"
+              APP_PUBLIC="b3ab0d04-bc8d-4644-a651-5449dc3dac1e"
               ;;
             *)
               echo "Unknown branch name: $BRANCH_NAME"
@@ -90,12 +101,12 @@ jobs:
             --build-arg REACT_APP_CUSTOMER_MANAGEMENT_API_PROXY_URL="https://api.${DOMAIN_SUFFIX}.scroll.codes/customersManage" \
             --build-arg REACT_APP_BRANCHES_VEHICLES_API_PROXY_URL="https://api.${DOMAIN_SUFFIX}.scroll.codes/vehiclesApi" \
             --build-arg REACT_APP_VEHICLES_SOCKET_PROXY="https://ws.${DOMAIN_SUFFIX}.scroll.codes:8006" \
-            --build-arg REACT_APP_AUTHORIZATION_API_PROXY_URL="https://sso.staging.tcenter.cloud" \
-            --build-arg REACT_APP_PAYMENTS_API_PROXY_URL="https://payments.staging.tcenter.cloud" \
-            --build-arg REACT_APP_BACKOFFICE_PRIVATE_KEY="3cca83ec-737f-426c-a99b-2675551c9a98" \
-            --build-arg REACT_APP_BACKOFFICE_PUBLIC_KEY="67fd6192-f277-4a82-b626-3706212ae8eb" \
-            --build-arg REACT_SCROLL_APP_PRIVATE="30b8e3d7-a571-4550-b91f-06ce8a6bbb0b" \
-            --build-arg REACT_SCROLL_APP_PUBLIC="c9c5a0d7-8ea1-40b9-a3ab-5da9bd23c9f1" \
+            --build-arg REACT_APP_AUTHORIZATION_API_PROXY_URL="${TCENTER_SSO}" \
+            --build-arg REACT_APP_PAYMENTS_API_PROXY_URL="${TCENTER_PAY}" \
+            --build-arg REACT_APP_BACKOFFICE_PRIVATE_KEY="${PRIVATE_KEY}" \
+            --build-arg REACT_APP_BACKOFFICE_PUBLIC_KEY="${PUBLIC_KEY}" \
+            --build-arg REACT_SCROLL_APP_PRIVATE="${APP_PRIVATE}" \
+            --build-arg REACT_SCROLL_APP_PUBLIC="${APP_PUBLIC}" \
             --build-arg REACT_APP_VEHICLES_RENTALS_API_PROXY_URL="https://api.${DOMAIN_SUFFIX}.scroll.codes/rentalsApi" .
             
           docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
