@@ -106,7 +106,8 @@ jobs:
       - name: Deploy to ECS
         if: ${{ !inputs.is_monorepo }}
         env:
-          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-${{ inputs.github_repo }}
+          #SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-${{ inputs.github_repo }}
+          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.github_repo }}
           CLUSTER_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-cluster
         run: |
           aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
