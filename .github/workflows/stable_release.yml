@@ -72,7 +72,8 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: latest
-          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-${{ inputs.github_repo }}
+          #SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-${{ inputs.github_repo }}
+          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.github_repo }}
         run: |
           echo "Service Name: $SERVICE_NAME"
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
