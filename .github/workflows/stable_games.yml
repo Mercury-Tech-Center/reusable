@@ -1,0 +1,113 @@
+name: Reusable ECS Deployment Workflow
+
+on:
+  workflow_call:
+    inputs:
+      is_monorepo:
+        required: true
+        type: boolean
+      apps:
+        required: false
+        type: string
+      aws_region:
+        required: true
+        type: string
+      ecs_cluster_name:
+        required: true
+        type: string
+      build_args:
+        required: false
+        type: string
+        default: ""
+      github_repo:
+        required: true
+        type: string
+      github_branch:
+        required: true
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+
+jobs:
+  build-and-push:
+    name: Build and push Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Retrieve AWS Account ID
+        id: aws-account-id
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+
+      - name: Build and Push Docker Images for Monorepo
+        if: ${{ inputs.is_monorepo }}
+        env:
+          IMAGE_TAG: latest
+        run: |
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
+          for app in ${{ inputs.apps }}; do
+            export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
+            docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=$app
+            docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+          done
+          
+      - name: Build, tag, and push image to Amazon ECR
+        if: ${{ !inputs.is_monorepo }}
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: latest
+          #SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-${{ inputs.github_repo }}
+          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.github_repo }}
+        run: |
+          echo "Service Name: $SERVICE_NAME"
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
+          docker build ${{ inputs.build_args }} -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+
+  deploy:
+    name: Deploy to ECS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+             aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+             aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+             aws-region: ${{ inputs.aws_region }}
+             
+      - name: Deploy...
+        env:
+          AWS_EC2_METADATA_DISABLED: true
+        if: ${{ inputs.is_monorepo }}
+        run: |
+          for app in ${{ inputs.apps }}; do
+            export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
+            export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+            aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+          done
+          
+      - name: Deploy to ECS
+        if: ${{ !inputs.is_monorepo }}
+        env:
+          #SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-${{ inputs.github_repo }}
+          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.github_repo }}
+          CLUSTER_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+        run: |
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
