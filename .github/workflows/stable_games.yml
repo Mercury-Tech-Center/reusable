@@ -70,7 +70,7 @@ jobs:
           # Generate checksums for JavaScript files after build (like before build)
           echo "Generating checksums for built JavaScript files..."
 
-          ls -la ./core/src/services/provably-fair/
+          ls -la .
           ls -la ./core/src/services/payouts/
 
 
