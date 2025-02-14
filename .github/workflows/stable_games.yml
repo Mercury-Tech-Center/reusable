@@ -77,24 +77,6 @@ jobs:
             -type f \
             -exec sha1sum {} \; > payouts_checksums_after.sha1
 
-      - name: Build and Push Docker Images for Monorepo
-        if: ${{ inputs.is_monorepo }}
-        env:
-          IMAGE_TAG: latest
-        run: |
-          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
-
-          # Loop through each application and build/push its Docker image
-          for app in ${{ inputs.apps }}; do
-            export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
-            
-            # Build Docker image
-            docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=$app
-            
-            # Push Docker image
-            docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
-          done
-
 
       # 2) Upload after-build checksums as a GitHub Actions artifact
       - name: Upload after-build checksums artifact
