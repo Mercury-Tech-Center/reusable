@@ -65,58 +65,8 @@ jobs:
             export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
             docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=$app
             docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
-            ls -la ./core/src/services/payouts/
-            ls -la ./core/
-            ls -la .
 
-            # Create a temporary container to extract built files
-            CONTAINER_ID=$(docker create $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG)
-
-            # ✅ Copy built files from inside the container to host
-            docker cp $CONTAINER_ID:/app/core/src/services/provably-fair ./provably-fair-dist
-            docker cp $CONTAINER_ID:/app/core/src/services/payouts ./payouts-dist
-
-            # ✅ Generate checksums for built files (from the extracted container files)
-            find ./provably-fair-dist/ -type f -exec sha1sum {} \; > provably_fair_checksums_after.sha1
-            find ./payouts-dist/ -type f -exec sha1sum {} \; > payouts_checksums_after.sha1
-
-            # Clean up the temporary container
-            docker rm $CONTAINER_ID
           done
-
-          # Generate checksums for JavaScript files after build (like before build)
-          echo "Generating checksums for built JavaScript files..."
-
-          find ./core/src/services/provably-fair/ \
-            -type f \
-            -exec sha1sum {} \; > provably_fair_checksums_after.sha1
-          find ./core/src/services/payouts/ \
-            -type f \
-            -exec sha1sum {} \; > payouts_checksums_after.sha1
-
-
-      # 2) Upload after-build checksums as a GitHub Actions artifact
-      - name: Upload after-build checksums artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: after-build-checksums
-          path: |
-            provably_fair_checksums_after.sha1
-            payouts_checksums_after.sha1
-
-      # 3) Configure AWS Credentials for S3 Upload
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-region: eu-central-1
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      # 4) Upload after-build checksums to S3
-      - name: Upload after-build checksums to S3
-        run: |
-          aws s3 cp provably_fair_checksums_after.sha1 s3://dev-checksum/provably_fair_checksums_after.sha1
-          aws s3 cp payouts_checksums_after.sha1 s3://dev-checksum/payouts_checksums_after.sha1
 
           
       - name: Build, tag, and push image to Amazon ECR v2
