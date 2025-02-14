@@ -70,10 +70,10 @@ jobs:
           # Generate checksums for JavaScript files after build (like before build)
           echo "Generating checksums for built JavaScript files..."
 
-          find ./core/dist/services/provably-fair/ \
+          find ./core/src/services/provably-fair/ \
             -type f \
             -exec sha1sum {} \; > provably_fair_checksums_after.sha1
-          find ./core/dist/services/payouts/ \
+          find ./core/src/services/payouts/ \
             -type f \
             -exec sha1sum {} \; > payouts_checksums_after.sha1
 
@@ -95,15 +95,6 @@ jobs:
             docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
           done
 
-      # 1) Generate checksums after build
-      - name: Generate checksums for provably-fair and payouts after build
-        run: |
-          find ./core/dist/services/provably-fair/ \
-            -type f \
-            -exec sha1sum {} \; > provably_fair_checksums_after.sha1
-          find ./core/dist/services/payouts/ \
-            -type f \
-            -exec sha1sum {} \; > payouts_checksums_after.sha1
 
       # 2) Upload after-build checksums as a GitHub Actions artifact
       - name: Upload after-build checksums artifact
