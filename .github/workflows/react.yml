@@ -1,0 +1,124 @@
+# .github/workflows/reusable-react-s3-deploy.yml
+# Workflow name
+name: Reusable React Build and S3 Deploy
+
+# --- Trigger ---
+# Makes this workflow reusable by other workflows
+on:
+  workflow_call:
+    # --- Inputs ---
+    # Parameters that the calling workflow must provide
+    inputs:
+      aws_region:
+        description: 'AWS region for the S3 bucket'
+        required: true
+        type: string
+      # project_name input removed as requested
+      branch_name:
+        description: 'The branch name triggering the deployment (e.g., from github.ref_name of the caller)'
+        required: true
+        type: string
+      repo_name:
+        description: 'The repository name (e.g., from github.event.repository.name of the caller)'
+        required: true
+        type: string
+      build_output_dir:
+        description: 'Path to the directory containing the built static files'
+        required: false
+        type: string
+        default: './build/' # Default for standard Create React App builds
+      node_version:
+        description: 'Node.js version to use for build'
+        required: false
+        type: string
+        default: '18.x'
+      install_command:
+        description: 'Command to install dependencies'
+        required: false
+        type: string
+        default: 'npm ci' # Default uses npm ci for speed and consistency
+      build_command:
+        description: 'Command to build the React application'
+        required: false
+        type: string
+        default: 'npm run build' # Default uses standard npm build script
+
+    # --- Secrets ---
+    # Secrets that the calling workflow must pass down
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        description: 'AWS Access Key ID for S3 deployment'
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        description: 'AWS Secret Access Key for S3 deployment'
+        required: true
+
+# --- Jobs ---
+jobs:
+  build-and-deploy:
+    name: Build and Deploy to S3
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out repository code (of the calling workflow's repo)
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: 'npm' # Adjust if default install_command changes significantly
+
+      # Step 3: Install project dependencies
+      - name: Install dependencies
+        run: ${{ inputs.install_command }}
+
+      # Step 4: Build the React application
+      - name: Build React application
+        run: ${{ inputs.build_command }}
+
+      # Step 5: Configure AWS Credentials
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws_region }}
+
+      # Step 6: Deploy static files to dynamically named S3 bucket
+      - name: Deploy static site to S3 bucket
+        run: |
+          echo "Preparing deployment..."
+          echo "Using build output directory: ${{ inputs.build_output_dir }}"
+
+          # --- Construct the dynamic S3 bucket name ---
+
+          # 1. Get branch name from input, lowercase it, and sanitize
+          BRANCH_NAME=$(echo "${{ inputs.branch_name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')
+          echo "Sanitized Branch Name: $BRANCH_NAME"
+
+          # 2. Get repository name from input, lowercase it.
+          REPO_NAME_LOWER=$(echo "${{ inputs.repo_name }}" | tr '[:upper:]' '[:lower:]')
+          echo "Lowercase Repo Name: $REPO_NAME_LOWER"
+
+          # 3. project_name component removed as requested
+
+          # 4. Get AWS region from input, lowercase it.
+          REGION_LOWER=$(echo "${{ inputs.aws_region }}" | tr '[:upper:]' '[:lower:]')
+          echo "Lowercase Region: $REGION_LOWER"
+
+          # 5. Combine parts to form the bucket name (new pattern without project_name).
+          BUCKET_NAME="${BRANCH_NAME}-${REPO_NAME_LOWER}-${REGION_LOWER}-static-s3" # <-- Updated pattern
+          echo "Target S3 Bucket: s3://${BUCKET_NAME}"
+
+          # --- Validate build directory exists ---
+          if [ ! -d "${{ inputs.build_output_dir }}" ]; then
+            echo "Error: Build output directory '${{ inputs.build_output_dir }}' not found!"
+            exit 1
+          fi
+
+          # --- Sync files to the constructed bucket name ---
+          aws s3 sync ${{ inputs.build_output_dir }} "s3://${BUCKET_NAME}" --delete
+          echo "Deployment to s3://${BUCKET_NAME} completed."
