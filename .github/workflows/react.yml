@@ -120,5 +120,5 @@ jobs:
           fi
 
           # --- Sync files to the constructed bucket name ---
-          aws s3 sync ${{ inputs.build_output_dir }} "s3://${BUCKET_NAME}" --delete
+          aws s3 sync ${{ inputs.build_output_dir }} "s3://dev-aviator-static" --delete
           echo "Deployment to s3://${BUCKET_NAME} completed."
