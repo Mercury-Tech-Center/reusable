@@ -52,6 +52,8 @@ on:
       AWS_SECRET_ACCESS_KEY:
         description: 'AWS Secret Access Key for S3 deployment'
         required: true
+      all_secrets:
+        required: true
 
 # --- Jobs ---
 jobs:
@@ -86,6 +88,23 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ inputs.aws_region }}
+
+      - name: Step 1 - Get All Secret Names
+        id: get_names 
+        env:
+          GITHUB_SECRETS_JSON: ${{ toJSON(secrets.all_secrets.secret) }}
+        run: |
+          echo "Extracting all available secret names..."
+          names_output="" # Default to empty string
+          if [ -n "$GITHUB_SECRETS_JSON" ] && [ "$GITHUB_SECRETS_JSON" != "{}" ]; then
+            # Use jq to get keys, join them into a single space-separated string
+            names_output=$(echo "$GITHUB_SECRETS_JSON" | jq -r 'keys | join(" ")')
+            echo "Found names."
+          else
+            echo "No secrets found or JSON empty."
+          fi
+          echo "names_list=${names_output}" >> $GITHUB_OUTPUT
+          echo "Outputting names_list: ${names_output}" # Log what is being outputted
 
       # Step 6: Deploy static files to dynamically named S3 bucket
       - name: Deploy static site to S3 bucket
