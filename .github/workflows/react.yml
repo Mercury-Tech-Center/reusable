@@ -45,15 +45,15 @@ on:
 
     # --- Secrets ---
     # Secrets that the calling workflow must pass down
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        description: 'AWS Access Key ID for S3 deployment'
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        description: 'AWS Secret Access Key for S3 deployment'
-        required: true
-      all_secrets:
-        required: true
+    # secrets:
+    #   AWS_ACCESS_KEY_ID:
+    #     description: 'AWS Access Key ID for S3 deployment'
+    #     required: true
+    #   AWS_SECRET_ACCESS_KEY:
+    #     description: 'AWS Secret Access Key for S3 deployment'
+    #     required: true
+    #   all_secrets:
+    #     required: true
 
 # --- Jobs ---
 jobs:
