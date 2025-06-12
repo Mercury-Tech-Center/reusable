@@ -107,15 +107,6 @@ jobs:
         env:
           AWS_EC2_METADATA_DISABLED: true
         run: |
-          pwd
-          echo "it works"
-          cp -r apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
-          cp -r apps/aviator-api/ apps/aviator-api-rtp2
-
-          sed -i 's/aviator-round-worker/aviator-round-worker-rtp2/g' apps/aviator-round-worker-rtp2/project.json
-          sed -i 's/aviator-api/aviator-api-rtp2/g' apps/aviator-api-rtp2/project.json
-
-          ls apps
           for app in ${{ inputs.apps }}; do
             export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
             export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
@@ -200,15 +191,6 @@ jobs:
       - name: Deploy to ECS in DR for monorepo
         if: ${{ inputs.is_monorepo }}
         run: |
-          pwd
-          echo "it works"
-          cp -r apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
-          cp -r apps/aviator-api/ apps/aviator-api-rtp2
-
-          sed -i 's/aviator-round-worker/aviator-round-worker-rtp2/g' apps/aviator-round-worker-rtp2/project.json
-          sed -i 's/aviator-api/aviator-api-rtp2/g' apps/aviator-api-rtp2/project.json
-
-          ls apps
           for app in ${{ inputs.apps }}; do
             export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
             export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
