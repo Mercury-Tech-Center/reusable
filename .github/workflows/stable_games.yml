@@ -63,6 +63,8 @@ jobs:
         env:
           IMAGE_TAG: latest
         run: |
+          pwd
+          cd apps
           ln -s aviator-round-worker/ ./aviator-round-worker-rtp2
           ln -s aviator-api/ ./aviator-api-rtp2
           ls
