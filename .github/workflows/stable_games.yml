@@ -63,6 +63,9 @@ jobs:
         env:
           IMAGE_TAG: latest
         run: |
+          ln -s aviator-round-worker/ ./aviator-round-worker-rtp2
+          ln -s aviator-api/ ./aviator-api-rtp2
+          ls
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
           for app in ${{ inputs.apps }}; do
             export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
