@@ -65,8 +65,8 @@ jobs:
         run: |
           pwd
           echo "it works"
-          ln -s apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
-          ln -s apps/aviator-api/ apps/aviator-api-rtp2
+          cp -r apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
+          cp -r apps/aviator-api/ apps/aviator-api-rtp2
           ls apps
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
           for app in ${{ inputs.apps }}; do
@@ -105,8 +105,8 @@ jobs:
         run: |
           pwd
           echo "it works"
-          ln -s apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
-          ln -s apps/aviator-api/ apps/aviator-api-rtp2
+          cp -r apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
+          cp -r apps/aviator-api/ apps/aviator-api-rtp2
           ls apps
           for app in ${{ inputs.apps }}; do
             export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
@@ -152,8 +152,8 @@ jobs:
         run: |
           pwd
           echo "it works"
-          ln -s apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
-          ln -s apps/aviator-api/ apps/aviator-api-rtp2
+          cp -r apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
+          cp -r apps/aviator-api/ apps/aviator-api-rtp2
           ls apps
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.dr_aws_region }}.amazonaws.com"
           for app in ${{ inputs.apps }}; do
@@ -190,8 +190,8 @@ jobs:
         run: |
           pwd
           echo "it works"
-          ln -s apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
-          ln -s apps/aviator-api/ apps/aviator-api-rtp2
+          cp -r apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
+          cp -r apps/aviator-api/ apps/aviator-api-rtp2
           ls apps
           for app in ${{ inputs.apps }}; do
             export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
