@@ -1,0 +1,223 @@
+name: Reusable ECS Deployment Workflow
+
+on:
+  workflow_call:
+    inputs:
+      is_monorepo:
+        required: true
+        type: boolean
+      apps:
+        required: false
+        type: string
+      aws_region:
+        required: true
+        type: string
+      dr_aws_region:
+        required: true
+        type: string
+      ecs_cluster_name:
+        required: true
+        type: string
+      build_args:
+        required: false
+        type: string
+        default: ""
+      github_repo:
+        required: true
+        type: string
+      github_branch:
+        required: true
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+
+jobs:
+  build-and-push:
+    name: Build and push Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Retrieve AWS Account ID
+        id: aws-account-id
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+
+      - name: Build and Push aviator-api-rtp2 Docker Images for Monorepo v1
+        if: ${{ inputs.is_monorepo }}
+        env:
+          IMAGE_TAG: latest
+        run: |
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
+          export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-api-rtp2
+          docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=aviator-api
+          docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+      
+      - name: Build and Push aviator-round-worker-rtp2 Docker Images for Monorepo v1
+        if: ${{ inputs.is_monorepo }}
+        env:
+          IMAGE_TAG: latest
+        run: |
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
+          export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-round-worker-rtp2
+          docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=aviator-round-worker
+          docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+
+      - name: Build and Push aviator-task-worker-rtp2 Docker Images for Monorepo v1
+        if: ${{ inputs.is_monorepo }}
+        env:
+          IMAGE_TAG: latest
+        run: |
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
+          export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-task-worker-rtp2
+          docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=aviator-task-worker
+          docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+
+
+  deploy:
+    name: Deploy to ECS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws_region }}
+             
+      - name: Deploy aviator-api-rtp2 to ECS for monorepo
+        if: ${{ inputs.is_monorepo }}
+        env:
+          AWS_EC2_METADATA_DISABLED: true
+        run: |
+          export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-api-rtp2
+          export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+          
+      - name: Deploy aviator-round-worker-rtp2 to ECS for monorepo
+        if: ${{ inputs.is_monorepo }}
+        env:
+          AWS_EC2_METADATA_DISABLED: true
+        run: |
+          export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-round-worker-rtp2
+          export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+
+      - name: Deploy aviator-task-worker-rtp2 to ECS for monorepo
+        if: ${{ inputs.is_monorepo }}
+        env:
+          AWS_EC2_METADATA_DISABLED: true
+        run: |
+          export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-task-worker-rtp2
+          export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+
+  dr_build-and-push:
+    name: Build and push Docker image in DR region
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Configure AWS credentials for DR
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.dr_aws_region }}
+
+      - name: Log in to Amazon ECR in DR region
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Retrieve AWS Account ID for DR
+        id: dr-aws-account-id
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+
+      - name: Build and Push aviator-api-rtp2 Docker Images for Monorepo v1 Dr
+        if: ${{ inputs.is_monorepo }}
+        env:
+          IMAGE_TAG: latest
+        run: |
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.dr_aws_region }}.amazonaws.com"
+          export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-api-rtp2
+          docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=aviator-api
+          docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+      
+      - name: Build and Push aviator-round-worker-rtp2 Docker Images for Monorepo v1 Dr
+        if: ${{ inputs.is_monorepo }}
+        env:
+          IMAGE_TAG: latest
+        run: |
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.dr_aws_region }}.amazonaws.com"
+          export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-round-worker-rtp2
+          docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=aviator-round-worker
+          docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+
+      - name: Build and Push aviator-task-worker-rtp2 Docker Images for Monorepo v1 Dr
+        if: ${{ inputs.is_monorepo }}
+        env:
+          IMAGE_TAG: latest
+        run: |
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.dr_aws_region }}.amazonaws.com"
+          export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-task-worker-rtp2
+          docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=aviator-task-worker
+          docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+
+
+
+  dr_deploy:
+    name: Deploy to ECS in DR region
+    needs: dr_build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials for DR
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.dr_aws_region }}
+
+      - name: Deploy aviator-api-rtp2 to ECS for monorepo
+        if: ${{ inputs.is_monorepo }}
+        env:
+          AWS_EC2_METADATA_DISABLED: true
+        run: |
+          export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-api-rtp2
+          export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+          
+      - name: Deploy aviator-round-worker-rtp2 to ECS for monorepo
+        if: ${{ inputs.is_monorepo }}
+        env:
+          AWS_EC2_METADATA_DISABLED: true
+        run: |
+          export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-round-worker-rtp2
+          export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+
+      - name: Deploy aviator-task-worker-rtp2 to ECS for monorepo
+        if: ${{ inputs.is_monorepo }}
+        env:
+          AWS_EC2_METADATA_DISABLED: true
+        run: |
+          export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-task-worker-rtp2
+          export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
