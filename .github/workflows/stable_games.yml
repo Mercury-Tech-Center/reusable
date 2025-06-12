@@ -64,8 +64,8 @@ jobs:
           IMAGE_TAG: latest
         run: |
           pwd
-          ln -s apps/aviator-round-worker/ ./aviator-round-worker-rtp2
-          ln -s apps/aviator-api/ ./aviator-api-rtp2
+          ln -s apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
+          ln -s apps/aviator-api/ apps/aviator-api-rtp2
           ls
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
           for app in ${{ inputs.apps }}; do
@@ -102,6 +102,10 @@ jobs:
         env:
           AWS_EC2_METADATA_DISABLED: true
         run: |
+          pwd
+          ln -s apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
+          ln -s apps/aviator-api/ apps/aviator-api-rtp2
+          ls
           for app in ${{ inputs.apps }}; do
             export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
             export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
@@ -144,6 +148,10 @@ jobs:
         env:
           IMAGE_TAG: latest
         run: |
+          pwd
+          ln -s apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
+          ln -s apps/aviator-api/ apps/aviator-api-rtp2
+          ls
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.dr_aws_region }}.amazonaws.com"
           for app in ${{ inputs.apps }}; do
             export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
@@ -177,6 +185,10 @@ jobs:
       - name: Deploy to ECS in DR for monorepo
         if: ${{ inputs.is_monorepo }}
         run: |
+          pwd
+          ln -s apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
+          ln -s apps/aviator-api/ apps/aviator-api-rtp2
+          ls
           for app in ${{ inputs.apps }}; do
             export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
             export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
