@@ -122,85 +122,77 @@ jobs:
           aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
 
   dr_build-and-push:
-    name: Build and push Docker image in DR region
+    name: Build & push in DR regions
     runs-on: ubuntu-latest
+    env:
+      DR_REGIONS: ${{ inputs.dr_aws_regions }}
     steps:
-      - name: Check out code
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-      - name: Configure AWS credentials for DR
+      - name: Configure AWS credentials for STS
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ inputs.dr_aws_region }}
-
-      - name: Log in to Amazon ECR in DR region
-        uses: aws-actions/amazon-ecr-login@v1
+          aws-region: ${{ inputs.aws_region }}
 
       - name: Retrieve AWS Account ID for DR
         id: dr-aws-account-id
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+          echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
 
-      - name: Build and Push Docker Images for Monorepo in DR
-        if: ${{ inputs.is_monorepo }}
-        env:
-          IMAGE_TAG: latest
+      - name: Loop regions & push
         run: |
-          pwd
-          echo "it works"
-          cp -r apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
-          cp -r apps/aviator-api/ apps/aviator-api-rtp2
+          IFS=',' read -r -a REGIONS <<< "$DR_REGIONS"
+          for region in "${REGIONS[@]}"; do
+            echo "→ Building/pushing to $region"
+            aws configure set region $region
+            aws ecr get-login-password \
+              | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$region.amazonaws.com
 
-          sed -i 's/aviator-round-worker/aviator-round-worker-rtp2/g' apps/aviator-round-worker-rtp2/project.json
-          sed -i 's/aviator-api/aviator-api-rtp2/g' apps/aviator-api-rtp2/project.json
-
-          ls apps
-          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.dr_aws_region }}.amazonaws.com"
-          for app in ${{ inputs.apps }}; do
-            export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
-            docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=$app
-            docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+            if [ "${{ inputs.is_monorepo }}" = "true" ]; then
+              for app in ${{ inputs.apps }}; do
+                SERVICE=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
+                REG="$ACCOUNT_ID.dkr.ecr.$region.amazonaws.com"
+                docker build -t $REG/$SERVICE:latest . --build-arg APP_NAME=$app
+                docker push $REG/$SERVICE:latest
+              done
+            else
+              SERVICE=${{ inputs.github_branch }}-${{ inputs.github_repo }}
+              REG="$ACCOUNT_ID.dkr.ecr.$region.amazonaws.com"
+              docker build ${{ inputs.build_args }} -t $REG/$SERVICE:latest .
+              docker push $REG/$SERVICE:latest
+            fi
           done
 
-      - name: Build, tag, and push image to Amazon ECR in DR
-        if: ${{ !inputs.is_monorepo }}
-        env:
-          IMAGE_TAG: latest
-          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.github_repo }}
-        run: |
-          echo "Service Name: $SERVICE_NAME"
-          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.dr_aws_region }}.amazonaws.com"
-          docker build ${{ inputs.build_args }} -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
-
   dr_deploy:
-    name: Deploy to ECS in DR region
+    name: Deploy to ECS in DR regions
     needs: dr_build-and-push
     runs-on: ubuntu-latest
+    env:
+      DR_REGIONS: ${{ inputs.dr_aws_regions }}
     steps:
-      - name: Configure AWS credentials for DR
-        uses: aws-actions/configure-aws-credentials@v1
+      - uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ inputs.dr_aws_region }}
+          aws-region: ${{ inputs.aws_region }}
 
-      - name: Deploy to ECS in DR for monorepo
-        if: ${{ inputs.is_monorepo }}
+      - name: Loop regions & deploy
         run: |
-          for app in ${{ inputs.apps }}; do
-            export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
-            export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
-            aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+          IFS=',' read -r -a REGIONS <<< "$DR_REGIONS"
+          for region in "${REGIONS[@]}"; do
+            echo "→ Deploying to $region"
+            aws configure set region $region
+            CLUSTER=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+
+            if [ "${{ inputs.is_monorepo }}" = "true" ]; then
+              for app in ${{ inputs.apps }}; do
+                SERVICE=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
+                aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment
+              done
+            else
+              SERVICE=${{ inputs.github_branch }}-${{ inputs.github_repo }}
+              aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment
+            fi
           done
-
-      - name: Deploy to ECS in DR for single repo
-        if: ${{ !inputs.is_monorepo }}
-        env:
-          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.github_repo }}
-          CLUSTER_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
-        run: |
-          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
