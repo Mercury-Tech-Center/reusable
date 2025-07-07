@@ -12,7 +12,7 @@ on:
       aws_region:
         required: true
         type: string
-      dr_aws_region:
+      dr_aws_regions:
         required: true
         type: string
       ecs_cluster_name:
