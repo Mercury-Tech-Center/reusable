@@ -146,30 +146,35 @@ jobs:
           IFS=',' read -r -a REGIONS <<< "$DR_REGIONS"
           for region in "${REGIONS[@]}"; do
             echo "→ Building/pushing to $region"
-            export AWS_REGION=$region
-            export AWS_DEFAULT_REGION=$region
+            export AWS_REGION=$region AWS_DEFAULT_REGION=$region
 
-            # login
             aws ecr get-login-password --region "$region" \
               | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$region.amazonaws.com"
 
-            for app in ${{ inputs.apps }}; do
-              SERVICE=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
+            if [ "${{ inputs.is_monorepo }}" = "true" ]; then
+              # Monorepo: build each app
+              for app in ${{ inputs.apps }}; do
+                SERVICE=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
+                REG="$ACCOUNT_ID.dkr.ecr.$region.amazonaws.com"
+                if aws ecr describe-repositories --repository-names "$SERVICE" --region "$region" >/dev/null 2>&1; then
+                  docker build -t "$REG/$SERVICE:latest" . --build-arg APP_NAME=$app
+                  docker push   "$REG/$SERVICE:latest"
+                else
+                  echo "→ Repo '$SERVICE' not found in $region—skipping"
+                fi
+              done
+            else
+              # Single-repo: build just one service
+              SERVICE=${{ inputs.github_branch }}-${{ inputs.github_repo }}
               REG="$ACCOUNT_ID.dkr.ecr.$region.amazonaws.com"
-
-              if aws ecr describe-repositories \
-                   --repository-names "$SERVICE" \
-                   --region "$region" >/dev/null 2>&1; then
-
-                echo "→ Repo exists: $SERVICE. Building & pushing…"
-                docker build -t "$REG/$SERVICE:latest" . --build-arg APP_NAME=$app
+              if aws ecr describe-repositories --repository-names "$SERVICE" --region "$region" >/dev/null 2>&1; then
+                docker build ${{ inputs.build_args }} -t "$REG/$SERVICE:latest" .
                 docker push   "$REG/$SERVICE:latest"
               else
-                echo "→ Repo '$SERVICE' not found in $region—skipping push"
+                echo "→ Repo '$SERVICE' not found in $region—skipping"
               fi
-            done
+            fi
           done
-
 
   dr_deploy:
     name: Deploy to ECS in DR regions
@@ -189,16 +194,17 @@ jobs:
           IFS=',' read -r -a REGIONS <<< "$DR_REGIONS"
           for region in "${REGIONS[@]}"; do
             echo "→ Deploying to $region"
-            aws configure set region $region
+            aws configure set region "$region"
+
             CLUSTER=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
 
             if [ "${{ inputs.is_monorepo }}" = "true" ]; then
               for app in ${{ inputs.apps }}; do
                 SERVICE=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
-                aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment
+                aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment
               done
             else
               SERVICE=${{ inputs.github_branch }}-${{ inputs.github_repo }}
-              aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment
+              aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment
             fi
           done
