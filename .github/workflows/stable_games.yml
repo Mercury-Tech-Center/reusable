@@ -146,9 +146,12 @@ jobs:
           IFS=',' read -r -a REGIONS <<< "$DR_REGIONS"
           for region in "${REGIONS[@]}"; do
             echo "→ Building/pushing to $region"
-            aws configure set region $region
-            aws ecr get-login-password \
-              | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$region.amazonaws.com
+            export AWS_REGION=$region
+            export AWS_DEFAULT_REGION=$region
+
+            aws ecr get-login-password --region "$region" \
+              | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$region.amazonaws.com"
+
 
             if [ "${{ inputs.is_monorepo }}" = "true" ]; then
               for app in ${{ inputs.apps }}; do
