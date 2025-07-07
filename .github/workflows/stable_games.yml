@@ -149,24 +149,27 @@ jobs:
             export AWS_REGION=$region
             export AWS_DEFAULT_REGION=$region
 
+            # login
             aws ecr get-login-password --region "$region" \
               | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$region.amazonaws.com"
 
-
-            if [ "${{ inputs.is_monorepo }}" = "true" ]; then
-              for app in ${{ inputs.apps }}; do
-                SERVICE=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
-                REG="$ACCOUNT_ID.dkr.ecr.$region.amazonaws.com"
-                docker build -t $REG/$SERVICE:latest . --build-arg APP_NAME=$app
-                docker push $REG/$SERVICE:latest
-              done
-            else
-              SERVICE=${{ inputs.github_branch }}-${{ inputs.github_repo }}
+            for app in ${{ inputs.apps }}; do
+              SERVICE=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
               REG="$ACCOUNT_ID.dkr.ecr.$region.amazonaws.com"
-              docker build ${{ inputs.build_args }} -t $REG/$SERVICE:latest .
-              docker push $REG/$SERVICE:latest
-            fi
+
+              if aws ecr describe-repositories \
+                   --repository-names "$SERVICE" \
+                   --region "$region" >/dev/null 2>&1; then
+
+                echo "→ Repo exists: $SERVICE. Building & pushing…"
+                docker build -t "$REG/$SERVICE:latest" . --build-arg APP_NAME=$app
+                docker push   "$REG/$SERVICE:latest"
+              else
+                echo "→ Repo '$SERVICE' not found in $region—skipping push"
+              fi
+            done
           done
+
 
   dr_deploy:
     name: Deploy to ECS in DR regions
