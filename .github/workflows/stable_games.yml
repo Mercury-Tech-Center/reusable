@@ -13,8 +13,9 @@ on:
         required: true
         type: string
       dr_aws_region:
-        required: true
+        required: false
         type: string
+        default: ""
       ecs_cluster_name:
         required: true
         type: string
@@ -63,20 +64,11 @@ jobs:
         env:
           IMAGE_TAG: latest
         run: |
-          pwd
-          echo "it works"
-          cp -r apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
-          cp -r apps/aviator-api/ apps/aviator-api-rtp2
-
-          sed -i 's/aviator-round-worker/aviator-round-worker-rtp2/g' apps/aviator-round-worker-rtp2/project.json
-          sed -i 's/aviator-api/aviator-api-rtp2/g' apps/aviator-api-rtp2/project.json
-
-          ls apps
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
           for app in ${{ inputs.apps }}; do
-            export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
+            SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
             docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=$app
-            docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+            docker push    $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
           done
 
       - name: Build, tag, and push image to Amazon ECR v2
@@ -85,10 +77,9 @@ jobs:
           IMAGE_TAG: latest
           SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.github_repo }}
         run: |
-          echo "Service Name: $SERVICE_NAME"
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
           docker build ${{ inputs.build_args }} -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+          docker push    $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
 
   deploy:
     name: Deploy to ECS
@@ -101,28 +92,50 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ inputs.aws_region }}
-             
+
       - name: Deploy to ECS for monorepo
         if: ${{ inputs.is_monorepo }}
-        env:
-          AWS_EC2_METADATA_DISABLED: true
         run: |
           for app in ${{ inputs.apps }}; do
-            export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
-            export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+            SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
+            CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
             aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
           done
-          
+
       - name: Deploy to ECS for single repo
         if: ${{ !inputs.is_monorepo }}
-        env:
-          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.github_repo }}
-          CLUSTER_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
         run: |
+          SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.github_repo }}
+          CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
           aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+
+  validate-dr:
+    name: Validate DR region
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Check DR-region input & availability
+        id: check
+        run: |
+          if [ -z "${{ inputs.dr_aws_region }}" ]; then
+            echo "::set-output name=skip::true"
+            exit 0
+          fi
+          if ! aws ec2 describe-regions \
+               --region us-east-1 \
+               --filters Name=region-name,Values="${{ inputs.dr_aws_region }}" \
+               --query "Regions[0].RegionName" \
+               --output text >/dev/null; then
+            echo "::set-output name=skip::true"
+          else
+            echo "::set-output name=skip::false"
+          fi
 
   dr_build-and-push:
     name: Build and push Docker image in DR region
+    needs: validate-dr
+    if: needs.validate-dr.outputs.skip == 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
@@ -135,7 +148,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ inputs.dr_aws_region }}
 
-      - name: Log in to Amazon ECR in DR region
+      - name: Log in to Amazon ECR in DR
         uses: aws-actions/amazon-ecr-login@v1
 
       - name: Retrieve AWS Account ID for DR
@@ -146,39 +159,34 @@ jobs:
 
       - name: Build and Push Docker Images for Monorepo in DR
         if: ${{ inputs.is_monorepo }}
-        env:
-          IMAGE_TAG: latest
         run: |
-          pwd
-          echo "it works"
-          cp -r apps/aviator-round-worker/ apps/aviator-round-worker-rtp2
-          cp -r apps/aviator-api/ apps/aviator-api-rtp2
-
-          sed -i 's/aviator-round-worker/aviator-round-worker-rtp2/g' apps/aviator-round-worker-rtp2/project.json
-          sed -i 's/aviator-api/aviator-api-rtp2/g' apps/aviator-api-rtp2/project.json
-
-          ls apps
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.dr_aws_region }}.amazonaws.com"
           for app in ${{ inputs.apps }}; do
-            export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
-            docker build -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG . --build-arg=APP_NAME=$app
-            docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+            SERVICE=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
+            if aws ecr describe-repositories --repository-names "$SERVICE" --region "${{ inputs.dr_aws_region }}" >/dev/null 2>&1; then
+              docker build -t "$ECR_REGISTRY/$SERVICE:latest" . --build-arg=APP_NAME=$app
+              docker push    "$ECR_REGISTRY/$SERVICE:latest"
+            else
+              echo "→ Repo '$SERVICE' not found in ${{ inputs.dr_aws_region }}—skipping"
+            fi
           done
 
       - name: Build, tag, and push image to Amazon ECR in DR
         if: ${{ !inputs.is_monorepo }}
-        env:
-          IMAGE_TAG: latest
-          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.github_repo }}
         run: |
-          echo "Service Name: $SERVICE_NAME"
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.dr_aws_region }}.amazonaws.com"
-          docker build ${{ inputs.build_args }} -t $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG
+          SERVICE=${{ inputs.github_branch }}-${{ inputs.github_repo }}
+          if aws ecr describe-repositories --repository-names "$SERVICE" --region "${{ inputs.dr_aws_region }}" >/dev/null 2>&1; then
+            docker build ${{ inputs.build_args }} -t "$ECR_REGISTRY/$SERVICE:latest" .
+            docker push    "$ECR_REGISTRY/$SERVICE:latest"
+          else
+            echo "→ Repo '$SERVICE' not found in ${{ inputs.dr_aws_region }}—skipping"
+          fi
 
   dr_deploy:
     name: Deploy to ECS in DR region
-    needs: dr_build-and-push
+    needs: [validate-dr, dr_build-and-push]
+    if: needs.validate-dr.outputs.skip == 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials for DR
@@ -192,15 +200,22 @@ jobs:
         if: ${{ inputs.is_monorepo }}
         run: |
           for app in ${{ inputs.apps }}; do
-            export SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
-            export CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
-            aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+            SERVICE=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app
+            CLUSTER=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+            if aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --region "${{ inputs.dr_aws_region }}" >/dev/null 2>&1; then
+              aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment
+            else
+              echo "→ Service '$SERVICE' not found in ${{ inputs.dr_aws_region }}—skipping"
+            fi
           done
 
       - name: Deploy to ECS in DR for single repo
         if: ${{ !inputs.is_monorepo }}
-        env:
-          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.github_repo }}
-          CLUSTER_NAME: ${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
         run: |
-          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+          SERVICE=${{ inputs.github_branch }}-${{ inputs.github_repo }}
+          CLUSTER=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+          if aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --region "${{ inputs.dr_aws_region }}" >/dev/null 2>&1; then
+            aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment
+          else
+            echo "→ Service '$SERVICE' not found in ${{ inputs.dr_aws_region }}—skipping"
+          fi
