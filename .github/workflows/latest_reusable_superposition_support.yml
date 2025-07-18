@@ -1,0 +1,118 @@
+name: Reusable Workflow with Conditional Build Args
+
+on:
+  workflow_call:
+    inputs:
+      repo_name:
+        required: true
+        type: string
+      branch_name:
+        required: true
+        type: string
+      cluster_name:
+        required: true
+        type: string
+      use_build_args:
+        required: false
+        type: boolean
+        default: false
+      is_mono_repo:
+        required: false
+        type: boolean
+        default: false
+         # superposition controls
+      superposition:
+        required: false
+        type: boolean
+        default: false
+      superposition_number:
+        required: false
+        type: string  # treat as string; will cast in bash
+        default: "1"
+      apps:
+        required: false
+        type: string
+    secrets:
+      aws_access_key_id:
+        required: true
+      aws_secret_access_key:
+        required: true
+      dynamic_build_args:
+        required: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.aws_access_key_id }}
+          aws-secret-access-key: ${{ secrets.aws_secret_access_key }}
+          aws-region: 'eu-central-1'
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and Push Docker images (with superposition support)
+        run: |
+          # Parse apps input (comma-separated)
+          if [ -n "${{ inputs.apps }}" ]; then
+            IFS=',' read -ra APPS <<< "${{ inputs.apps }}"
+          else
+            APPS=("${{ inputs.repo_name }}")
+          fi
+
+          for app in "${APPS[@]}"; do
+            if [ "${{ inputs.superposition }}" = "true" ]; then
+              MAX="${{ inputs.superposition_number }}"
+              for i in $(seq 0 "$MAX"); do
+                if [ "$i" -eq 0 ]; then
+                  SUFFIX=""
+                else
+                  SUFFIX="$i"
+                fi
+                SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-$app${SUFFIX}"
+                IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest"
+                if [ "${{ inputs.use_build_args }}" = "true" ] && [ -n "${{ secrets.dynamic_build_args }}" ]; then
+                  docker build ${{ secrets.dynamic_build_args }} -t $IMAGE_URI . --build-arg=APP_NAME="$app"
+                else
+                  docker build -t $IMAGE_URI . --build-arg=APP_NAME="$app"
+                fi
+                docker push $IMAGE_URI
+              done
+            else
+              SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-$app"
+              IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest"
+              if [ "${{ inputs.use_build_args }}" = "true" ] && [ -n "${{ secrets.dynamic_build_args }}" ]; then
+                docker build ${{ secrets.dynamic_build_args }} -t $IMAGE_URI . --build-arg=APP_NAME="$app"
+              else
+                docker build -t $IMAGE_URI . --build-arg=APP_NAME="$app"
+              fi
+              docker push $IMAGE_URI
+            fi
+          done
+
+      - name: Update ECS Services (with superposition support)
+        run: |
+          CLUSTER_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-cluster"
+          if [ "${{ inputs.superposition }}" = "true" ]; then
+            MAX="${{ inputs.superposition_number }}"
+            for i in $(seq 0 "$MAX"); do
+              if [ "$i" -eq 0 ]; then
+                SUFFIX=""
+              else
+                SUFFIX="$i"
+              fi
+              SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${{ inputs.repo_name }}${SUFFIX}"
+              aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+            done
+          else
+            SERVICE_NAME="${{ inputs.branch_name }}-${{ inputs.cluster_name }}-${{ inputs.repo_name }}"
+            aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
+          fi
