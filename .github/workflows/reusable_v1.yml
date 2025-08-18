@@ -22,10 +22,6 @@ on:
         type: string
         default: "eu-central-1"
         description: "Regions that deploy automatically"
-      slack-webhook-url:
-        required: false
-        type: string
-        description: "Slack webhook URL for notifications"
       slack-channel:
         required: false
         type: string
@@ -49,6 +45,9 @@ on:
         required: false
       NPM_REGISTRY:
         required: false
+      SLACK_WEBHOOK_URL:
+        required: false
+        description: "Slack webhook URL for notifications"
 
 jobs:
   build:
