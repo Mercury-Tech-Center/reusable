@@ -181,18 +181,12 @@ jobs:
           echo "Slack Channel: ${{ inputs.slack-channel }}"
 
       - name: Notify deployment started
-        uses: 8398a7/action-slack@v3.15.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        with:
-          status: custom
-          channel: ${{ inputs.slack-channel }}
-          text: |
-            🚀 *Deployment Started*
-            • Repository: `${{ toJSON(inputs.repository-name) }}`
-            • Branch: `${{ toJSON(inputs.branch-name) }}`
-            • Team: ${{ toJSON(inputs.slack-team) }}`
-            • Regions: ${{ toJSON(steps.parse-regions.outputs.regions) }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"🚀 *Deployment Started*\n• Repository: \`${{ inputs.repository-name }}\`\n• Branch: \`${{ inputs.branch-name }}\`\n• Team: ${{ inputs.slack-team }}\n• Regions: \`${{ steps.parse-regions.outputs.regions }}\`\"
+            }" \
+            ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification failed"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -237,17 +231,12 @@ jobs:
             --force-new-deployment
 
       - name: Notify auto-deployment success
-        uses: 8398a7/action-slack@v3.15.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        with:
-          status: custom
-          channel: ${{ inputs.slack-channel }}
-          text: |
-            ✅ *Auto-Deployment Success*
-            • Region: `${{ toJSON(matrix.region) }}`
-            • Cluster: `${{ toJSON(needs.build.outputs.env) }}-${{ toJSON(inputs.brand-name) }}-cluster`
-            • Status: Deployed automatically
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"✅ *Auto-Deployment Success*\n• Region: \`${{ matrix.region }}\`\n• Cluster: \`${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster\`\n• Status: Deployed automatically\"
+            }" \
+            ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification failed"
 
   deploy-manual-regions:
     needs: [build, deploy-auto-regions]
@@ -277,17 +266,12 @@ jobs:
             --force-new-deployment
 
       - name: Notify deployment success
-        uses: 8398a7/action-slack@v3.15.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        with:
-          status: custom
-          channel: ${{ inputs.slack-channel }}
-          text: |
-            ✅ *Deployment Success*
-            • Region: `${{ toJSON(matrix.region) }}`
-            • Cluster: `${{ toJSON(needs.build.outputs.env) }}-${{ toJSON(inputs.brand-name) }}-cluster`
-            • Status: Successfully deployed
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"✅ *Deployment Success*\n• Region: \`${{ matrix.region }}\`\n• Cluster: \`${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster\`\n• Status: Successfully deployed\"
+            }" \
+            ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification failed"
 
   notify-approval-required:
     needs: build
@@ -298,18 +282,12 @@ jobs:
         region: ${{ fromJson(needs.build.outputs.manual_regions_json) }}
     steps:
       - name: Notify manual approval required
-        uses: 8398a7/action-slack@v3.15.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        with:
-          status: custom
-          channel: ${{ inputs.slack-channel }}
-          text: |
-            ⏳ *Manual Approval Required*
-            • Region: `${{ toJSON(matrix.region) }}`
-            • Team: ${{ toJSON(inputs.slack-team) }}`
-            • Deployment is waiting for manual approval in ${{ toJSON(matrix.region) }}
-            • <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Click to review and approve>
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"⏳ *Manual Approval Required*\n• Region: \`${{ matrix.region }}\`\n• Team: ${{ inputs.slack-team }}\n• Deployment is waiting for manual approval in ${{ matrix.region }}\n• <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Click to review and approve>\"
+            }" \
+            ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification failed"
 
   deployment-summary:
     needs: [build, deploy-auto-regions, deploy-manual-regions]
@@ -348,12 +326,9 @@ jobs:
           echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
 
       - name: Notify deployment summary
-        uses: 8398a7/action-slack@v3.15.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        with:
-          status: custom
-          channel: ${{ inputs.slack-channel }}
-          text: |
-            📊 *Deployment Summary*
-            ${{ steps.generate-summary.outputs.summary }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"📊 *Deployment Summary*\n${{ steps.generate-summary.outputs.summary }}\"
+            }" \
+            ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification failed"
