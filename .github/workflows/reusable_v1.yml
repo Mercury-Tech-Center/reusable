@@ -58,8 +58,6 @@ jobs:
       auto-regions: ${{ steps.parse-regions.outputs.auto_regions }}
       manual-regions: ${{ steps.parse-regions.outputs.manual_regions }}
       env: ${{ steps.set-env.outputs.env }}
-      auto-regions-json: ${{ steps.create-arrays.outputs.auto_regions_json }}
-      manual-regions-json: ${{ steps.create-arrays.outputs.manual_regions_json }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -112,33 +110,6 @@ jobs:
           done
 
           echo "manual_regions=$MANUAL_REGIONS" >> $GITHUB_OUTPUT
-
-      - name: Create JSON arrays for matrix
-        id: create-arrays
-        run: |
-          # Create JSON array for auto regions - split by comma and create proper array
-          IFS=',' read -ra AUTO_REGIONS <<< "${{ steps.parse-regions.outputs.auto_regions }}"
-          AUTO_JSON="["
-          for i in "${!AUTO_REGIONS[@]}"; do
-            if [ $i -gt 0 ]; then
-              AUTO_JSON="$AUTO_JSON,"
-            fi
-            AUTO_JSON="$AUTO_JSON\"${AUTO_REGIONS[$i]}\""
-          done
-          AUTO_JSON="$AUTO_JSON]"
-          echo "auto_regions_json=$AUTO_JSON" >> $GITHUB_OUTPUT
-
-          # Create JSON array for manual regions - split by comma and create proper array
-          IFS=',' read -ra MANUAL_REGIONS <<< "${{ steps.parse-regions.outputs.manual_regions }}"
-          MANUAL_JSON="["
-          for i in "${!MANUAL_REGIONS[@]}"; do
-            if [ $i -gt 0 ]; then
-              MANUAL_JSON="$MANUAL_JSON,"
-            fi
-            MANUAL_JSON="$MANUAL_JSON\"${MANUAL_REGIONS[$i]}\""
-          done
-          MANUAL_JSON="$MANUAL_JSON]"
-          echo "manual_regions_json=$MANUAL_JSON" >> $GITHUB_OUTPUT
 
       - name: Set environment variables dynamically
         id: set-env
@@ -211,83 +182,76 @@ jobs:
   deploy-auto-regions:
     needs: build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        region: ${{ fromJson(needs.build.outputs.auto_regions_json) }}
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ matrix.region }}
+          aws-region: eu-central-1
 
-      - name: Deploy to ${{ matrix.region }}
+      - name: Deploy to auto regions
         run: |
-          aws ecs update-service \
-            --cluster ${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster \
-            --service ${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-${{ inputs.repository-name }} \
-            --region ${{ matrix.region }} \
-            --force-new-deployment
-
-      - name: Notify auto-deployment success
-        run: |
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{
-              \"text\": \"✅ *Auto-Deployment Success*\n• Region: \`${{ matrix.region }}\`\n• Cluster: \`${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster\`\n• Status: Deployed automatically\"
-            }" \
-            ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification failed"
+          IFS=',' read -ra REGIONS <<< "${{ needs.build.outputs.auto_regions }}"
+          for region in "${REGIONS[@]}"; do
+            echo "Deploying to $region"
+            aws ecs update-service \
+              --cluster ${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster \
+              --service ${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-${{ inputs.repository-name }} \
+              --region $region \
+              --force-new-deployment
+            
+            # Notify success for this region
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{
+                \"text\": \"✅ *Auto-Deployment Success*\n• Region: \`$region\`\n• Cluster: \`${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster\`\n• Status: Deployed automatically\"
+              }" \
+              ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification failed"
+          done
 
   deploy-manual-regions:
     needs: [build, deploy-auto-regions]
     runs-on: ubuntu-latest
     if: needs.build.outputs.manual-regions != ''
-    strategy:
-      matrix:
-        region: ${{ fromJson(needs.build.outputs.manual_regions_json) }}
-    environment: ${{ matrix.region }}-approval
+    environment: manual-approval
     steps:
       - name: Wait for manual approval
-        run: echo "Waiting for approval to deploy to ${{ matrix.region }}"
+        run: echo "Waiting for approval to deploy to manual regions"
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ matrix.region }}
-
-      - name: Deploy to ${{ matrix.region }}
+      - name: Deploy to manual regions
         run: |
-          aws ecs update-service \
-            --cluster ${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster \
-            --service ${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-${{ inputs.repository-name }} \
-            --region ${{ matrix.region }} \
-            --force-new-deployment
-
-      - name: Notify deployment success
-        run: |
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{
-              \"text\": \"✅ *Deployment Success*\n• Region: \`${{ matrix.region }}\`\n• Cluster: \`${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster\`\n• Status: Successfully deployed\"
-            }" \
-            ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification failed"
+          IFS=',' read -ra REGIONS <<< "${{ needs.build.outputs.manual_regions }}"
+          for region in "${REGIONS[@]}"; do
+            echo "Deploying to $region"
+            aws ecs update-service \
+              --cluster ${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster \
+              --service ${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-${{ inputs.repository-name }} \
+              --region $region \
+              --force-new-deployment
+            
+            # Notify success for this region
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{
+                \"text\": \"✅ *Deployment Success*\n• Region: \`$region\`\n• Cluster: \`${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster\`\n• Status: Successfully deployed\"
+              }" \
+              ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification failed"
+          done
 
   notify-approval-required:
     needs: build
     runs-on: ubuntu-latest
     if: needs.build.outputs.manual-regions != ''
-    strategy:
-      matrix:
-        region: ${{ fromJson(needs.build.outputs.manual_regions_json) }}
     steps:
       - name: Notify manual approval required
         run: |
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{
-              \"text\": \"⏳ *Manual Approval Required*\n• Region: \`${{ matrix.region }}\`\n• Team: ${{ inputs.slack-team }}\n• Deployment is waiting for manual approval in ${{ matrix.region }}\n• <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Click to review and approve>\"
-            }" \
-            ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification failed"
+          IFS=',' read -ra REGIONS <<< "${{ needs.build.outputs.manual_regions }}"
+          for region in "${REGIONS[@]}"; do
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{
+                \"text\": \"⏳ *Manual Approval Required*\n• Region: \`$region\`\n• Team: ${{ inputs.slack-team }}\n• Deployment is waiting for manual approval in $region\n• <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Click to review and approve>\"
+              }" \
+              ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification failed"
+          done
 
   deployment-summary:
     needs: [build, deploy-auto-regions, deploy-manual-regions]
