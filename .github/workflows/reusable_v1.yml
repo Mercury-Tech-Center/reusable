@@ -58,6 +58,8 @@ jobs:
       auto-regions: ${{ steps.parse-regions.outputs.auto_regions }}
       manual-regions: ${{ steps.parse-regions.outputs.manual_regions }}
       env: ${{ steps.set-env.outputs.env }}
+      auto-regions-json: ${{ steps.create-arrays.outputs.auto_regions_json }}
+      manual-regions-json: ${{ steps.create-arrays.outputs.manual_regions_json }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -110,6 +112,15 @@ jobs:
           done
 
           echo "manual_regions=$MANUAL_REGIONS" >> $GITHUB_OUTPUT
+
+      - name: Create JSON arrays for matrix
+        id: create-arrays
+        run: |
+          # Create JSON array for auto regions
+          echo "auto_regions_json=[\"${{ steps.parse-regions.outputs.auto_regions }}\"]" >> $GITHUB_OUTPUT
+
+          # Create JSON array for manual regions
+          echo "manual_regions_json=[\"${{ steps.parse-regions.outputs.manual_regions }}\"]" >> $GITHUB_OUTPUT
 
       - name: Set environment variables dynamically
         id: set-env
@@ -190,7 +201,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        region: ${{ fromJson(format('["{0}"]', needs.build.outputs.auto_regions)) }}
+        region: ${{ fromJson(needs.build.outputs.auto_regions_json) }}
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -226,7 +237,7 @@ jobs:
     if: needs.build.outputs.manual-regions != ''
     strategy:
       matrix:
-        region: ${{ fromJson(format('["{0}"]', needs.build.outputs.manual_regions)) }}
+        region: ${{ fromJson(needs.build.outputs.manual_regions_json) }}
     environment: ${{ matrix.region }}-approval
     steps:
       - name: Wait for manual approval
@@ -266,7 +277,7 @@ jobs:
     if: needs.build.outputs.manual-regions != ''
     strategy:
       matrix:
-        region: ${{ fromJson(format('["{0}"]', needs.build.outputs.manual_regions)) }}
+        region: ${{ fromJson(needs.build.outputs.manual_regions_json) }}
     steps:
       - name: Notify manual approval required
         uses: 8398a7/action-slack@v3.15.0
