@@ -65,49 +65,16 @@ jobs:
       - name: Parse region configuration
         id: parse-regions
         run: |
-          if [ -n "${{ inputs.regions }}" ]; then
-            # Parse comma-separated regions
-            echo "regions=${{ inputs.regions }}" >> $GITHUB_OUTPUT
+          # Set regions directly from inputs
+          echo "auto_regions=${{ inputs.auto-deploy-regions }}" >> $GITHUB_OUTPUT
+          echo "manual_regions=${{ inputs.manual-deploy-regions }}" >> $GITHUB_OUTPUT
+
+          # Combine for total regions (if needed for display)
+          if [ -n "${{ inputs.manual-deploy-regions }}" ]; then
+            echo "regions=${{ inputs.auto-deploy-regions }},${{ inputs.manual-deploy-regions }}" >> $GITHUB_OUTPUT
           else
-            # Use branch-based defaults
-            case "${{ inputs.branch-name }}" in
-              "prod")
-                echo "regions=eu-central-1,us-east-1,ap-southeast-1" >> $GITHUB_OUTPUT
-                echo "auto_regions=eu-central-1" >> $GITHUB_OUTPUT
-                ;;
-              "staging")
-                echo "regions=eu-central-1,us-east-1" >> $GITHUB_OUTPUT
-                echo "auto_regions=eu-central-1" >> $GITHUB_OUTPUT
-                ;;
-              *)
-                echo "regions=eu-central-1" >> $GITHUB_OUTPUT
-                echo "auto_regions=eu-central-1" >> $GITHUB_OUTPUT
-                ;;
-            esac
+            echo "regions=${{ inputs.auto-deploy-regions }}" >> $GITHUB_OUTPUT
           fi
-
-          # If auto-deploy-regions is specified, override
-          if [ -n "${{ inputs.auto-deploy-regions }}" ]; then
-            echo "auto_regions=${{ inputs.auto-deploy-regions }}" >> $GITHUB_OUTPUT
-          fi
-
-          # Calculate manual regions AFTER all overrides
-          IFS=',' read -ra ALL_REGIONS <<< "${{ steps.parse-regions.outputs.regions }}"
-          IFS=',' read -ra AUTO_REGIONS <<< "${{ steps.parse-regions.outputs.auto_regions }}"
-
-          MANUAL_REGIONS=""
-          for region in "${ALL_REGIONS[@]}"; do
-            if [[ ! " ${AUTO_REGIONS[@]} " =~ " ${region} " ]]; then
-              if [ -z "$MANUAL_REGIONS" ]; then
-                MANUAL_REGIONS="$region"
-              else
-                MANUAL_REGIONS="$MANUAL_REGIONS,$region"
-              fi
-            fi
-          done
-
-          echo "manual_regions=$MANUAL_REGIONS" >> $GITHUB_OUTPUT
-
       - name: Set environment variables dynamically
         id: set-env
         run: |
