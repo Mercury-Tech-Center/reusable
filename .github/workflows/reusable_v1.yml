@@ -1,0 +1,309 @@
+name: Multi-Region ECS Deploy
+
+on:
+  workflow_call:
+    inputs:
+      branch-name:
+        required: true
+        type: string
+      repository-name:
+        required: true
+        type: string
+      brand-name:
+        required: true
+        type: string
+      regions:
+        required: false
+        type: string
+        default: "eu-central-1"
+        description: "Comma-separated list of regions to deploy to"
+      auto-deploy-regions:
+        required: false
+        type: string
+        default: "eu-central-1"
+        description: "Regions that deploy automatically"
+      slack-webhook-url:
+        required: false
+        type: string
+        description: "Slack webhook URL for notifications"
+      slack-channel:
+        required: false
+        type: string
+        default: "#deployments"
+        description: "Slack channel for notifications"
+      slack-team:
+        required: false
+        type: string
+        description: "Team name for notification context"
+      slack-critical-tag:
+        required: false
+        type: string
+        default: "@here"
+        description: "Tag for critical notifications"
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      NPM_TOKEN:
+        required: false
+      NPM_REGISTRY:
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image-uri: ${{ steps.build.outputs.image-uri }}
+      regions: ${{ steps.parse-regions.outputs.regions }}
+      auto-regions: ${{ steps.parse-regions.outputs.auto_regions }}
+      manual-regions: ${{ steps.parse-regions.outputs.manual_regions }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Parse region configuration
+        id: parse-regions
+        run: |
+          if [ -n "${{ inputs.regions }}" ]; then
+            # Parse comma-separated regions
+            echo "regions=${{ inputs.regions }}" >> $GITHUB_OUTPUT
+          else
+            # Use branch-based defaults
+            case "${{ inputs.branch-name }}" in
+              "main")
+                echo "regions=eu-central-1,us-east-1,ap-southeast-1" >> $GITHUB_OUTPUT
+                echo "auto_regions=eu-central-1" >> $GITHUB_OUTPUT
+                echo "manual_regions=us-east-1,ap-southeast-1" >> $GITHUB_OUTPUT
+                ;;
+              "staging")
+                echo "regions=eu-central-1,us-east-1" >> $GITHUB_OUTPUT
+                echo "auto_regions=eu-central-1" >> $GITHUB_OUTPUT
+                echo "manual_regions=us-east-1" >> $GITHUB_OUTPUT
+                ;;
+              *)
+                echo "regions=eu-central-1" >> $GITHUB_OUTPUT
+                echo "auto_regions=eu-central-1" >> $GITHUB_OUTPUT
+                echo "manual_regions=" >> $GITHUB_OUTPUT
+                ;;
+            esac
+          fi
+
+          # If auto-deploy-regions is specified, override
+          if [ -n "${{ inputs.auto-deploy-regions }}" ]; then
+            echo "auto_regions=${{ inputs.auto-deploy-regions }}" >> $GITHUB_OUTPUT
+          fi
+
+          # Calculate manual regions
+          IFS=',' read -ra ALL_REGIONS <<< "${{ steps.parse-regions.outputs.regions }}"
+          IFS=',' read -ra AUTO_REGIONS <<< "${{ steps.parse-regions.outputs.auto_regions }}"
+
+          MANUAL_REGIONS=""
+          for region in "${ALL_REGIONS[@]}"; do
+            if [[ ! " ${AUTO_REGIONS[@]} " =~ " ${region} " ]]; then
+              if [ -z "$MANUAL_REGIONS" ]; then
+                MANUAL_REGIONS="$region"
+              else
+                MANUAL_REGIONS="$MANUAL_REGIONS,$region"
+              fi
+            fi
+          done
+
+          echo "manual_regions=$MANUAL_REGIONS" >> $GITHUB_OUTPUT
+
+      - name: Set environment variables dynamically
+        run: |
+          BRANCH_NAME="${{ inputs.branch-name }}"
+          REPOSITORY_NAME="${{ inputs.repository-name }}"
+          BRAND_NAME="${{ inputs.brand-name }}"
+          case "$BRANCH_NAME" in
+            "dev")
+              ENV="dev"
+              CLUSTER_SUFFIX="dev"
+              ;;
+            "staging")
+              ENV="staging"
+              CLUSTER_SUFFIX="staging"
+              ;;
+            "main")
+              ENV="prod"
+              CLUSTER_SUFFIX="prod"
+              ;;
+            *)
+              echo "Unknown branch name: $BRANCH_NAME"
+              exit 1
+              ;;
+          esac
+          CLUSTER_NAME="scr-${CLUSTER_SUFFIX}-cluster"
+          SERVICE_NAME="scr-${CLUSTER_SUFFIX}-${REPOSITORY_NAME}"
+
+          echo "ENV=$ENV" >> $GITHUB_ENV
+          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
+          echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
+
+      - name: Notify deployment started
+        if: inputs.slack-webhook-url != ''
+        run: |
+          ./scripts/slack-notify.sh \
+            --webhook "${{ inputs.slack-webhook-url }}" \
+            --channel "${{ inputs.slack-channel }}" \
+            --event "deployment_started" \
+            --repo "${{ inputs.repository-name }}" \
+            --branch "${{ inputs.branch-name }}" \
+            --regions "${{ steps.parse-regions.outputs.regions }}" \
+            --team "${{ inputs.slack-team }}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-central-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, tag, and push Docker image to Amazon ECR
+        id: build
+        run: |
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest \
+            --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} \
+            --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} .
+          docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
+          echo "image-uri=${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest" >> $GITHUB_OUTPUT
+
+  deploy-auto-regions:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        region: ${{ fromJson(format('["{0}"]', needs.build.outputs.auto_regions)) }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ matrix.region }}
+
+      - name: Deploy to ${{ matrix.region }}
+        run: |
+          aws ecs update-service \
+            --cluster scr-${{ needs.build.outputs.env }}-cluster \
+            --service scr-${{ needs.build.outputs.env }}-${{ inputs.repository-name }} \
+            --region ${{ matrix.region }} \
+            --force-new-deployment
+
+      - name: Notify auto-deployment success
+        if: inputs.slack-webhook-url != ''
+        run: |
+          ./scripts/slack-notify.sh \
+            --webhook "${{ inputs.slack-webhook-url }}" \
+            --channel "${{ inputs.slack-channel }}" \
+            --event "auto_deployment_success" \
+            --region "${{ matrix.region }}" \
+            --cluster "scr-${{ needs.build.outputs.env }}-cluster" \
+            --team "${{ inputs.slack-team }}"
+
+  deploy-manual-regions:
+    needs: [build, deploy-auto-regions]
+    runs-on: ubuntu-latest
+    if: needs.build.outputs.manual-regions != ''
+    strategy:
+      matrix:
+        region: ${{ fromJson(format('["{0}"]', needs.build.outputs.manual-regions)) }}
+    environment: ${{ matrix.region }}-approval
+    steps:
+      - name: Wait for manual approval
+        run: echo "Waiting for approval to deploy to ${{ matrix.region }}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ matrix.region }}
+
+      - name: Deploy to ${{ matrix.region }}
+        run: |
+          aws ecs update-service \
+            --cluster scr-${{ needs.build.outputs.env }}-cluster \
+            --service scr-${{ needs.build.outputs.env }}-${{ inputs.repository-name }} \
+            --region ${{ matrix.region }} \
+            --force-new-deployment
+
+      - name: Notify deployment success
+        if: inputs.slack-webhook-url != ''
+        run: |
+          ./scripts/slack-notify.sh \
+            --webhook "${{ inputs.slack-webhook-url }}" \
+            --channel "${{ inputs.slack-channel }}" \
+            --event "deployment_success" \
+            --region "${{ matrix.region }}" \
+            --cluster "scr-${{ needs.build.outputs.env }}-cluster" \
+            --team "${{ inputs.slack-team }}"
+
+  notify-approval-required:
+    needs: build
+    runs-on: ubuntu-latest
+    if: needs.build.outputs.manual-regions != '' && inputs.slack-webhook-url != ''
+    strategy:
+      matrix:
+        region: ${{ fromJson(format('["{0}"]', needs.build.outputs.manual-regions)) }}
+    steps:
+      - name: Notify manual approval required
+        run: |
+          ./scripts/slack-notify.sh \
+            --webhook "${{ inputs.slack-webhook-url }}" \
+            --channel "${{ inputs.slack-channel }}" \
+            --event "approval_required" \
+            --region "${{ matrix.region }}" \
+            --workflow_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --team "${{ inputs.slack-team }}"
+
+  deployment-summary:
+    needs: [build, deploy-auto-regions, deploy-manual-regions]
+    runs-on: ubuntu-latest
+    if: always()
+    outputs:
+      summary: ${{ steps.generate-summary.outputs.summary }}
+    steps:
+      - name: Generate deployment summary
+        id: generate-summary
+        run: |
+          SUMMARY="*Deployment Summary for ${{ inputs.repository-name }}*\n"
+          SUMMARY+="• Branch: \`${{ inputs.branch-name }}\`\n"
+          SUMMARY+="• Team: ${{ inputs.slack-team }}\n"
+          SUMMARY+="• Environment: ${{ needs.build.outputs.env }}\n\n"
+
+          # Add auto-deployment results
+          if [ -n "${{ needs.build.outputs.auto-regions }}" ]; then
+            SUMMARY+="*Auto-Deployed Regions:*\n"
+            IFS=',' read -ra AUTO_REGIONS <<< "${{ needs.build.outputs.auto-regions }}"
+            for region in "${AUTO_REGIONS[@]}"; do
+              SUMMARY+="• ✅ \`$region\` - Deployed automatically\n"
+            done
+            SUMMARY+="\n"
+          fi
+
+          # Add manual deployment results
+          if [ -n "${{ needs.build.outputs.manual-regions }}" ]; then
+            SUMMARY+="*Manual Approval Regions:*\n"
+            IFS=',' read -ra MANUAL_REGIONS <<< "${{ needs.build.outputs.manual-regions }}"
+            for region in "${MANUAL_REGIONS[@]}"; do
+              SUMMARY+="• ⏳ \`$region\` - Requires manual approval\n"
+            done
+          fi
+
+          echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+
+      - name: Notify deployment summary
+        if: inputs.slack-webhook-url != ''
+        run: |
+          ./scripts/slack-notify.sh \
+            --webhook "${{ inputs.slack-webhook-url }}" \
+            --channel "${{ inputs.slack-channel }}" \
+            --event "deployment_summary" \
+            --summary "${{ steps.deployment-summary.outputs.summary }}" \
+            --team "${{ inputs.slack-team }}"
