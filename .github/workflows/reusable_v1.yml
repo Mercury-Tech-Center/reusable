@@ -12,16 +12,16 @@ on:
       brand-name:
         required: true
         type: string
-      regions:
-        required: false
-        type: string
-        default: "eu-central-1"
-        description: "Comma-separated list of regions to deploy to"
       auto-deploy-regions:
         required: false
         type: string
         default: "eu-central-1"
         description: "Regions that deploy automatically"
+      manual-deploy-regions:
+        required: false
+        type: string
+        default: ""
+        description: "Regions that require manual approval"
       slack-channel:
         required: false
         type: string
@@ -54,7 +54,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image-uri: ${{ steps.build.outputs.image-uri }}
-      regions: ${{ steps.parse-regions.outputs.regions }}
       auto-regions: ${{ steps.parse-regions.outputs.auto_regions }}
       manual-regions: ${{ steps.parse-regions.outputs.manual_regions }}
       env: ${{ steps.set-env.outputs.env }}
@@ -69,12 +68,6 @@ jobs:
           echo "auto_regions=${{ inputs.auto-deploy-regions }}" >> $GITHUB_OUTPUT
           echo "manual_regions=${{ inputs.manual-deploy-regions }}" >> $GITHUB_OUTPUT
 
-          # Combine for total regions (if needed for display)
-          if [ -n "${{ inputs.manual-deploy-regions }}" ]; then
-            echo "regions=${{ inputs.auto-deploy-regions }},${{ inputs.manual-deploy-regions }}" >> $GITHUB_OUTPUT
-          else
-            echo "regions=${{ inputs.auto-deploy-regions }}" >> $GITHUB_OUTPUT
-          fi
       - name: Set environment variables dynamically
         id: set-env
         run: |
@@ -109,9 +102,8 @@ jobs:
 
       - name: Debug region parsing
         run: |
-          echo "Input regions: ${{ inputs.regions }}"
           echo "Input auto-deploy-regions: ${{ inputs.auto-deploy-regions }}"
-          echo "Parsed regions: ${{ steps.parse-regions.outputs.regions }}"
+          echo "Input manual-deploy-regions: ${{ inputs.manual-deploy-regions }}"
           echo "Parsed auto_regions: ${{ steps.parse-regions.outputs.auto_regions }}"
           echo "Parsed manual_regions: ${{ steps.parse-regions.outputs.manual_regions }}"
 
@@ -120,14 +112,13 @@ jobs:
           echo "Repository: ${{ inputs.repository-name }}"
           echo "Branch: ${{ inputs.branch-name }}"
           echo "Team: ${{ inputs.slack-team }}"
-          echo "Regions: ${{ steps.parse-regions.outputs.regions }}"
           echo "Slack Channel: ${{ inputs.slack-channel }}"
 
       - name: Notify deployment started
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data "{
-              \"text\": \"🚀 *Deployment Started*\n• Repository: \`${{ inputs.repository-name }}\`\n• Branch: \`${{ inputs.branch-name }}\`\n• Team: ${{ inputs.slack-team }}\n• Regions: \`${{ steps.parse-regions.outputs.regions }}\`\"
+              \"text\": \"🚀 *Deployment Started*\n• Repository: \`${{ inputs.repository-name }}\`\n• Branch: \`${{ inputs.branch-name }}\`\n• Team: ${{ inputs.slack-team }}\n• Auto Regions: \`${{ steps.parse-regions.outputs.auto_regions }}\`\n• Manual Regions: \`${{ steps.parse-regions.outputs.manual_regions }}\`\"
             }" \
             ${{ secrets.SLACK_WEBHOOK_URL }} || echo "Slack notification failed"
 
