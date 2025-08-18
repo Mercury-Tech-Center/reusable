@@ -113,32 +113,33 @@ jobs:
 
           echo "manual_regions=$MANUAL_REGIONS" >> $GITHUB_OUTPUT
 
-          - name: Create JSON arrays for matrix
-          id: create-arrays
-          run: |
-            # Create JSON array for auto regions - split by comma and create proper array
-            IFS=',' read -ra AUTO_REGIONS <<< "${{ steps.parse-regions.outputs.auto_regions }}"
-            AUTO_JSON="["
-            for i in "${!AUTO_REGIONS[@]}"; do
-              if [ $i -gt 0 ]; then
-                AUTO_JSON="$AUTO_JSON,"
-              fi
-              AUTO_JSON="$AUTO_JSON\"${AUTO_REGIONS[$i]}\""
-            done
-            AUTO_JSON="$AUTO_JSON]"
-            echo "auto_regions_json=$AUTO_JSON" >> $GITHUB_OUTPUT
-            
-            # Create JSON array for manual regions - split by comma and create proper array
-            IFS=',' read -ra MANUAL_REGIONS <<< "${{ steps.parse-regions.outputs.manual_regions }}"
-            MANUAL_JSON="["
-            for i in "${!MANUAL_REGIONS[@]}"; do
-              if [ $i -gt 0 ]; then
-                MANUAL_JSON="$MANUAL_JSON,"
-              fi
-              MANUAL_JSON="$MANUAL_JSON\"${MANUAL_REGIONS[$i]}\""
-            done
-            MANUAL_JSON="$MANUAL_JSON]"
-            echo "manual_regions_json=$MANUAL_JSON" >> $GITHUB_OUTPUT
+      - name: Create JSON arrays for matrix
+        id: create-arrays
+        run: |
+          # Create JSON array for auto regions - split by comma and create proper array
+          IFS=',' read -ra AUTO_REGIONS <<< "${{ steps.parse-regions.outputs.auto_regions }}"
+          AUTO_JSON="["
+          for i in "${!AUTO_REGIONS[@]}"; do
+            if [ $i -gt 0 ]; then
+              AUTO_JSON="$AUTO_JSON,"
+            fi
+            AUTO_JSON="$AUTO_JSON\"${AUTO_REGIONS[$i]}\""
+          done
+          AUTO_JSON="$AUTO_JSON]"
+          echo "auto_regions_json=$AUTO_JSON" >> $GITHUB_OUTPUT
+
+          # Create JSON array for manual regions - split by comma and create proper array
+          IFS=',' read -ra MANUAL_REGIONS <<< "${{ steps.parse-regions.outputs.manual_regions }}"
+          MANUAL_JSON="["
+          for i in "${!MANUAL_REGIONS[@]}"; do
+            if [ $i -gt 0 ]; then
+              MANUAL_JSON="$MANUAL_JSON,"
+            fi
+            MANUAL_JSON="$MANUAL_JSON\"${MANUAL_REGIONS[$i]}\""
+          done
+          MANUAL_JSON="$MANUAL_JSON]"
+          echo "manual_regions_json=$MANUAL_JSON" >> $GITHUB_OUTPUT
+
       - name: Set environment variables dynamically
         id: set-env
         run: |
