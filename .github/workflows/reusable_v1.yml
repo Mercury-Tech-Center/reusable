@@ -144,17 +144,17 @@ jobs:
           echo "env=$ENV" >> $GITHUB_OUTPUT
 
       - name: Notify deployment started
-        run: |
-          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
-            ${{ github.workspace }}/scripts/slack-notify.sh \
-              --webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \
-              --channel "${{ inputs.slack-channel }}" \
-              --event "deployment_started" \
-              --repo "${{ inputs.repository-name }}" \
-              --branch "${{ inputs.branch-name }}" \
-              --regions "${{ steps.parse-regions.outputs.regions }}" \
-              --team "${{ inputs.slack-team }}"
-          fi
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          channel: ${{ inputs.slack-channel }}
+          text: |
+            🚀 *Deployment Started*
+            • Repository: `${{ inputs.repository-name }}`
+            • Branch: `${{ inputs.branch-name }}`
+            • Team: ${{ inputs.slack-team }}
+            • Regions: `${{ steps.parse-regions.outputs.regions }}`
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -199,16 +199,16 @@ jobs:
             --force-new-deployment
 
       - name: Notify auto-deployment success
-        run: |
-          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
-            ${{ github.workspace }}/scripts/slack-notify.sh \
-              --webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \
-              --channel "${{ inputs.slack-channel }}" \
-              --event "auto_deployment_success" \
-              --region "${{ matrix.region }}" \
-              --cluster "${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster" \
-              --team "${{ inputs.slack-team }}"
-          fi
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          channel: ${{ inputs.slack-channel }}
+          text: |
+            ✅ *Auto-Deployment Success*
+            • Region: `${{ matrix.region }}`
+            • Cluster: `${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster`
+            • Status: Deployed automatically
 
   deploy-manual-regions:
     needs: [build, deploy-auto-regions]
@@ -238,16 +238,16 @@ jobs:
             --force-new-deployment
 
       - name: Notify deployment success
-        run: |
-          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
-            ${{ github.workspace }}/scripts/slack-notify.sh \
-              --webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \
-              --channel "${{ inputs.slack-channel }}" \
-              --event "deployment_success" \
-              --region "${{ matrix.region }}" \
-              --cluster "${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster" \
-              --team "${{ inputs.slack-team }}"
-          fi
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          channel: ${{ inputs.slack-channel }}
+          text: |
+            ✅ *Deployment Success*
+            • Region: `${{ matrix.region }}`
+            • Cluster: `${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-cluster`
+            • Status: Successfully deployed
 
   notify-approval-required:
     needs: build
@@ -258,16 +258,17 @@ jobs:
         region: ${{ fromJson(format('["{0}"]', needs.build.outputs.manual_regions)) }}
     steps:
       - name: Notify manual approval required
-        run: |
-          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
-            ${{ github.workspace }}/scripts/slack-notify.sh \
-              --webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \
-              --channel "${{ inputs.slack-channel }}" \
-              --event "approval_required" \
-              --region "${{ matrix.region }}" \
-              --workflow_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-              --team "${{ inputs.slack-team }}"
-          fi
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          channel: ${{ inputs.slack-channel }}
+          text: |
+            ⏳ *Manual Approval Required*
+            • Region: `${{ matrix.region }}`
+            • Team: ${{ inputs.slack-team }}
+            • Deployment is waiting for manual approval in ${{ matrix.region }}
+            • <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Click to review and approve>
 
   deployment-summary:
     needs: [build, deploy-auto-regions, deploy-manual-regions]
@@ -306,12 +307,11 @@ jobs:
           echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
 
       - name: Notify deployment summary
-        run: |
-          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
-            ${{ github.workspace }}/scripts/slack-notify.sh \
-              --webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \
-              --channel "${{ inputs.slack-channel }}" \
-              --event "deployment_summary" \
-              --summary "${{ steps.generate-summary.outputs.summary }}" \
-              --team "${{ inputs.slack-team }}"
-          fi
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          channel: ${{ inputs.slack-channel }}
+          text: |
+            📊 *Deployment Summary*
+            ${{ steps.generate-summary.outputs.summary }}
