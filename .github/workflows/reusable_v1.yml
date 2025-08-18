@@ -175,7 +175,7 @@ jobs:
   deploy-manual-regions:
     needs: [build, deploy-auto-regions]
     runs-on: ubuntu-latest
-    if: needs.build.outputs.manual-regions != ''
+    if: contains(needs.build.outputs.manual-regions, ',') || (needs.build.outputs.manual-regions != '' && needs.build.outputs.manual-regions != 'null')
     environment: manual-approval
     steps:
       - name: Wait for manual approval
@@ -203,7 +203,7 @@ jobs:
   notify-approval-required:
     needs: build
     runs-on: ubuntu-latest
-    if: needs.build.outputs.manual-regions != ''
+    if: contains(needs.build.outputs.manual-regions, ',') || (needs.build.outputs.manual-regions != '' && needs.build.outputs.manual-regions != 'null')
     steps:
       - name: Notify manual approval required
         run: |
