@@ -134,8 +134,8 @@ jobs:
               exit 1
               ;;
           esac
-          CLUSTER_NAME="scr-${CLUSTER_SUFFIX}-cluster"
-          SERVICE_NAME="scr-${CLUSTER_SUFFIX}-${REPOSITORY_NAME}"
+          CLUSTER_NAME="${CLUSTER_SUFFIX}-${BRAND_NAME}-cluster"
+          SERVICE_NAME="${CLUSTER_SUFFIX}-${BRAND_NAME}-${REPOSITORY_NAME}"
 
           echo "ENV=$ENV" >> $GITHUB_ENV
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
