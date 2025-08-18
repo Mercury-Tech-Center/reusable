@@ -74,17 +74,14 @@ jobs:
               "prod")
                 echo "regions=eu-central-1,us-east-1,ap-southeast-1" >> $GITHUB_OUTPUT
                 echo "auto_regions=eu-central-1" >> $GITHUB_OUTPUT
-                echo "manual_regions=us-east-1,ap-southeast-1" >> $GITHUB_OUTPUT
                 ;;
               "staging")
                 echo "regions=eu-central-1,us-east-1" >> $GITHUB_OUTPUT
                 echo "auto_regions=eu-central-1" >> $GITHUB_OUTPUT
-                echo "manual_regions=us-east-1" >> $GITHUB_OUTPUT
                 ;;
               *)
                 echo "regions=eu-central-1" >> $GITHUB_OUTPUT
                 echo "auto_regions=eu-central-1" >> $GITHUB_OUTPUT
-                echo "manual_regions=" >> $GITHUB_OUTPUT
                 ;;
             esac
           fi
@@ -94,7 +91,7 @@ jobs:
             echo "auto_regions=${{ inputs.auto-deploy-regions }}" >> $GITHUB_OUTPUT
           fi
 
-          # Calculate manual regions
+          # Calculate manual regions AFTER all overrides
           IFS=',' read -ra ALL_REGIONS <<< "${{ steps.parse-regions.outputs.regions }}"
           IFS=',' read -ra AUTO_REGIONS <<< "${{ steps.parse-regions.outputs.auto_regions }}"
 
@@ -142,6 +139,14 @@ jobs:
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
           echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
           echo "env=$ENV" >> $GITHUB_OUTPUT
+
+      - name: Debug region parsing
+        run: |
+          echo "Input regions: ${{ inputs.regions }}"
+          echo "Input auto-deploy-regions: ${{ inputs.auto-deploy-regions }}"
+          echo "Parsed regions: ${{ steps.parse-regions.outputs.regions }}"
+          echo "Parsed auto_regions: ${{ steps.parse-regions.outputs.auto_regions }}"
+          echo "Parsed manual_regions: ${{ steps.parse-regions.outputs.manual_regions }}"
 
       - name: Debug inputs and outputs
         run: |
