@@ -22,6 +22,11 @@ on:
         type: string
         default: ""
         description: "Regions that require manual approval"
+      approvers:
+        required: false
+        type: string
+        default: ""
+        description: "Comma-separated list of GitHub usernames who can approve deployments"
       slack-channel:
         required: false
         type: string
@@ -176,10 +181,14 @@ jobs:
     needs: [build, deploy-auto-regions]
     runs-on: ubuntu-latest
     if: contains(needs.build.outputs.manual-regions, ',') || (needs.build.outputs.manual-regions != '' && needs.build.outputs.manual-regions != 'null')
-    environment: manual-approval
     steps:
       - name: Wait for manual approval
-        run: echo "Waiting for approval to deploy to manual regions"
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ secrets.GITHUB_TOKEN }}
+          approvers: ${{ inputs.approvers }}
+          minimum-approvals: 1
+          exclude-workflow-initiator-as-approver: false
 
       - name: Deploy to manual regions
         run: |
