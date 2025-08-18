@@ -145,9 +145,10 @@ jobs:
 
       - name: Notify deployment started
         uses: 8398a7/action-slack@v3
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:
           status: custom
-          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
           channel: ${{ inputs.slack-channel }}
           text: |
             🚀 *Deployment Started*
@@ -200,9 +201,10 @@ jobs:
 
       - name: Notify auto-deployment success
         uses: 8398a7/action-slack@v3
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:
           status: custom
-          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
           channel: ${{ inputs.slack-channel }}
           text: |
             ✅ *Auto-Deployment Success*
@@ -239,9 +241,10 @@ jobs:
 
       - name: Notify deployment success
         uses: 8398a7/action-slack@v3
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:
           status: custom
-          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
           channel: ${{ inputs.slack-channel }}
           text: |
             ✅ *Deployment Success*
@@ -259,9 +262,10 @@ jobs:
     steps:
       - name: Notify manual approval required
         uses: 8398a7/action-slack@v3
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:
           status: custom
-          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
           channel: ${{ inputs.slack-channel }}
           text: |
             ⏳ *Manual Approval Required*
@@ -308,9 +312,10 @@ jobs:
 
       - name: Notify deployment summary
         uses: 8398a7/action-slack@v3
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:
           status: custom
-          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
           channel: ${{ inputs.slack-channel }}
           text: |
             📊 *Deployment Summary*
