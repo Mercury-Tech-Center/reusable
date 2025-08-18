@@ -146,7 +146,7 @@ jobs:
       - name: Notify deployment started
         run: |
           if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
-            ./slack-notify.sh \
+             ./scripts/slack-notify.sh \
               --webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \
               --channel "${{ inputs.slack-channel }}" \
               --event "deployment_started" \
@@ -201,7 +201,7 @@ jobs:
       - name: Notify auto-deployment success
         run: |
           if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
-            ./slack-notify.sh \
+             ./scripts/slack-notify.sh \
               --webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \
               --channel "${{ inputs.slack-channel }}" \
               --event "auto_deployment_success" \
@@ -240,7 +240,7 @@ jobs:
       - name: Notify deployment success
         run: |
           if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
-            ./slack-notify.sh \
+             ./scripts/slack-notify.sh \
               --webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \
               --channel "${{ inputs.slack-channel }}" \
               --event "deployment_success" \
@@ -260,7 +260,7 @@ jobs:
               - name: Notify manual approval required
                 run: |
                   if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
-                    ./slack-notify.sh \
+                     ./scripts/slack-notify.sh \
                       --webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \
                       --channel "${{ inputs.slack-channel }}" \
                       --event "approval_required" \
@@ -308,7 +308,7 @@ jobs:
           - name: Notify deployment started
           run: |
             if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
-              ./slack-notify.sh \
+               ./scripts/slack-notify.sh \
                 --webhook "${{ secrets.SLACK_WEBHOOK_URL }}" \
                 --channel "${{ inputs.slack-channel }}" \
                 --event "deployment_started" \
