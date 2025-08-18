@@ -131,8 +131,6 @@ jobs:
               CLUSTER_SUFFIX="prod"
               ;;
             *)
-
-
               echo "Unknown branch name: $BRANCH_NAME"
               exit 1
               ;;
@@ -155,7 +153,6 @@ jobs:
 
       - name: Notify deployment started
         uses: 8398a7/action-slack@v3.15.0
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:
@@ -166,7 +163,7 @@ jobs:
             • Repository: `${{ toJSON(inputs.repository-name) }}`
             • Branch: `${{ toJSON(inputs.branch-name) }}`
             • Team: ${{ toJSON(inputs.slack-team) }}`
-            • Regions: `${{ toJSON(steps.parse-regions.outputs.regions) }}`
+            • Regions: ${{ toJSON(steps.parse-regions.outputs.regions) }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -212,7 +209,6 @@ jobs:
 
       - name: Notify auto-deployment success
         uses: 8398a7/action-slack@v3.15.0
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:
@@ -253,7 +249,6 @@ jobs:
 
       - name: Notify deployment success
         uses: 8398a7/action-slack@v3.15.0
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:
@@ -275,7 +270,6 @@ jobs:
     steps:
       - name: Notify manual approval required
         uses: 8398a7/action-slack@v3.15.0
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:
@@ -316,7 +310,7 @@ jobs:
           # Add manual deployment results
           if [ -n "${{ needs.build.outputs.manual_regions }}" ]; then
             SUMMARY+="*Manual Approval Regions:*\n"
-            IFS=',' read -ra MANUAL_REGIONS <<< "${{ needs.build.outputsaxo-regions }}"
+            IFS=',' read -ra MANUAL_REGIONS <<< "${{ needs.build.outputs.manual_regions }}"
             for region in "${MANUAL_REGIONS[@]}"; do
               SUMMARY+="• ⏳ \`$region\` - Requires manual approval\n"
             done
@@ -326,7 +320,6 @@ jobs:
 
       - name: Notify deployment summary
         uses: 8398a7/action-slack@v3.15.0
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         with:
