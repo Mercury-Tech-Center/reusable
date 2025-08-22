@@ -62,6 +62,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Debug inputs received
+        run: |
+          echo "=== INPUT DEBUG ==="
+          echo "branch-name: '${{ inputs.branch-name }}'"
+          echo "repository-name: '${{ inputs.repository-name }}'"
+          echo "brand-name: '${{ inputs.brand-name }}'"
+          echo "auto-deploy-regions: '${{ inputs.auto-deploy-regions }}'"
+          echo "manual-deploy-regions: '${{ inputs.manual-deploy-regions }}'"
+          echo "=================="
+
       - name: Parse region configuration
         id: parse-regions
         run: |
