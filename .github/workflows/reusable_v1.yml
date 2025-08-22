@@ -72,30 +72,6 @@ jobs:
           echo "manual-deploy-regions: '${{ inputs.manual-deploy-regions }}'"
           echo "=================="
 
-      - name: Parse region configuration
-        id: parse-regions
-        run: |
-          echo "=== PARSE REGIONS STEP START ==="
-
-          # Debug: show what inputs we're receiving
-          echo "Received auto-deploy-regions input: '${{ inputs.auto-deploy-regions }}'"
-          echo "Received manual-deploy-regions input: '${{ inputs.manual-deploy-regions }}'"
-
-          # Set regions as environment variables instead of outputs
-          echo "AUTO_REGIONS=${{ inputs.auto-deploy-regions }}" >> $GITHUB_ENV
-          echo "MANUAL_REGIONS=${{ inputs.manual-deploy-regions }}" >> $GITHUB_ENV
-
-          # Debug: show what we're setting
-          echo "Set AUTO_REGIONS env var to: '${{ inputs.auto-deploy-regions }}'"
-          echo "Set MANUAL_REGIONS env var to: '${{ inputs.manual-deploy-regions }}'"
-
-          # Verify the environment variables were set
-          echo "Verifying environment variables:"
-          echo "AUTO_REGIONS env var: $AUTO_REGIONS"
-          echo "MANUAL_REGIONS env var: $MANUAL_REGIONS"
-
-          echo "=== PARSE REGIONS STEP END ==="
-
       - name: Set environment variables dynamically
         id: set-env
         run: |
@@ -123,11 +99,23 @@ jobs:
           CLUSTER_NAME="${CLUSTER_SUFFIX}-${BRAND_NAME}-cluster"
           SERVICE_NAME="${CLUSTER_SUFFIX}-${BRAND_NAME}-${REPOSITORY_NAME}"
 
+          # Set regions as environment variables
+          AUTO_REGIONS="${{ inputs.auto-deploy-regions }}"
+          MANUAL_REGIONS="${{ inputs.manual-deploy-regions }}"
+
           echo "ENV=$ENV" >> $GITHUB_ENV
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
           echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
+          echo "AUTO_REGIONS=$AUTO_REGIONS" >> $GITHUB_ENV
+          echo "MANUAL_REGIONS=$MANUAL_REGIONS" >> $GITHUB_ENV
           echo "env=$ENV" >> $GITHUB_OUTPUT
           echo "service-name=$SERVICE_NAME" >> $GITHUB_OUTPUT
+
+          # Debug: show what we set
+          echo "=== ENVIRONMENT VARIABLES SET ==="
+          echo "AUTO_REGIONS: $AUTO_REGIONS"
+          echo "MANUAL_REGIONS: $MANUAL_REGIONS"
+          echo "================================"
 
       - name: Debug region parsing
         run: |
