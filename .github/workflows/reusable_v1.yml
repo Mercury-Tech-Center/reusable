@@ -177,7 +177,16 @@ jobs:
 
       - name: Build, push and deploy to auto regions
         run: |
+          echo "=== DEBUG INFO ==="
+          echo "Auto regions from build job: '${{ needs.build.outputs.auto_regions }}'"
+          echo "Auto regions length: ${#needs.build.outputs.auto_regions}"
+          echo "Auto regions type: $(echo "${{ needs.build.outputs.auto_regions }}" | wc -c)"
+          echo "=================="
+
           IFS=',' read -ra REGIONS <<< "${{ needs.build.outputs.auto_regions }}"
+          echo "Parsed regions array length: ${#REGIONS[@]}"
+          echo "Regions array: ${REGIONS[*]}"
+
           for region in "${REGIONS[@]}"; do
             echo "Processing auto region: $region"
             
