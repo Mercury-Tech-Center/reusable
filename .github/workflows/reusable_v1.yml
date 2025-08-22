@@ -55,8 +55,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
-      auto-regions: ${{ steps.parse-regions.outputs.auto_regions }}
-      manual-regions: ${{ steps.parse-regions.outputs.manual_regions }}
+      auto-regions: ${{ env.AUTO_REGIONS }}
+      manual-regions: ${{ env.MANUAL_REGIONS }}
       env: ${{ steps.set-env.outputs.env }}
     steps:
       - name: Checkout code
@@ -81,18 +81,18 @@ jobs:
           echo "Received auto-deploy-regions input: '${{ inputs.auto-deploy-regions }}'"
           echo "Received manual-deploy-regions input: '${{ inputs.manual-deploy-regions }}'"
 
-          # Set regions directly from inputs - using correct GitHub Actions syntax
-          echo "auto_regions=${{ inputs.auto-deploy-regions }}" >> $GITHUB_OUTPUT
-          echo "manual_regions=${{ inputs.manual-deploy-regions }}" >> $GITHUB_OUTPUT
+          # Set regions as environment variables instead of outputs
+          echo "AUTO_REGIONS=${{ inputs.auto-deploy-regions }}" >> $GITHUB_ENV
+          echo "MANUAL_REGIONS=${{ inputs.manual-deploy-regions }}" >> $GITHUB_ENV
 
           # Debug: show what we're setting
-          echo "Set auto_regions to: '${{ inputs.auto-deploy-regions }}'"
-          echo "Set manual_regions to: '${{ inputs.manual-deploy-regions }}'"
+          echo "Set AUTO_REGIONS env var to: '${{ inputs.auto-deploy-regions }}'"
+          echo "Set MANUAL_REGIONS env var to: '${{ inputs.manual-deploy-regions }}'"
 
-          # Verify the outputs were set
-          echo "Verifying outputs:"
-          echo "auto_regions output: ${{ steps.parse-regions.outputs.auto_regions }}"
-          echo "manual_regions output: ${{ steps.parse-regions.outputs.manual_regions }}"
+          # Verify the environment variables were set
+          echo "Verifying environment variables:"
+          echo "AUTO_REGIONS env var: $AUTO_REGIONS"
+          echo "MANUAL_REGIONS env var: $MANUAL_REGIONS"
 
           echo "=== PARSE REGIONS STEP END ==="
 
