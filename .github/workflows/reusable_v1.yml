@@ -234,8 +234,8 @@ jobs:
               # Login to ECR in this region
               aws ecr get-login-password --region $region | docker login --username AWS --password-stdin ${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-${{ inputs.repository-name }}.${{ needs.build.outputs.env }}.dkr.ecr.$region.amazonaws.com
               
-              # Tag and push to this region
-              SOURCE_IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ needs.build.outputs.service-name }}:latest"
+              # Tag and push to this region - use the image from build job
+              SOURCE_IMAGE="${{ needs.build.outputs.image-uri }}"
               TARGET_REGISTRY="${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-${{ inputs.repository-name }}.${{ needs.build.outputs.env }}.dkr.ecr.$region.amazonaws.com"
               
               docker tag $SOURCE_IMAGE $TARGET_REGISTRY:latest
