@@ -81,10 +81,8 @@ jobs:
           echo "Received auto-deploy-regions input: '${{ inputs.auto-deploy-regions }}'"
           echo "Received manual-deploy-regions input: '${{ inputs.manual-deploy-regions }}'"
 
-          # Set regions directly from inputs
-          echo "Setting auto_regions output..."
+          # Set regions directly from inputs - using correct GitHub Actions syntax
           echo "auto_regions=${{ inputs.auto-deploy-regions }}" >> $GITHUB_OUTPUT
-          echo "Setting manual_regions output..."
           echo "manual_regions=${{ inputs.manual-deploy-regions }}" >> $GITHUB_OUTPUT
 
           # Debug: show what we're setting
