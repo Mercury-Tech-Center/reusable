@@ -75,22 +75,28 @@ jobs:
       - name: Parse region configuration
         id: parse-regions
         run: |
+          echo "=== PARSE REGIONS STEP START ==="
+
           # Debug: show what inputs we're receiving
           echo "Received auto-deploy-regions input: '${{ inputs.auto-deploy-regions }}'"
           echo "Received manual-deploy-regions input: '${{ inputs.manual-deploy-regions }}'"
 
           # Set regions directly from inputs
+          echo "Setting auto_regions output..."
           echo "auto_regions=${{ inputs.auto-deploy-regions }}" >> $GITHUB_OUTPUT
+          echo "Setting manual_regions output..."
           echo "manual_regions=${{ inputs.manual-deploy-regions }}" >> $GITHUB_OUTPUT
 
           # Debug: show what we're setting
-          echo "Setting auto_regions to: '${{ inputs.auto-deploy-regions }}'"
-          echo "Setting manual_regions to: '${{ inputs.manual-deploy-regions }}'"
+          echo "Set auto_regions to: '${{ inputs.auto-deploy-regions }}'"
+          echo "Set manual_regions to: '${{ inputs.manual-deploy-regions }}'"
 
           # Verify the outputs were set
           echo "Verifying outputs:"
           echo "auto_regions output: ${{ steps.parse-regions.outputs.auto_regions }}"
           echo "manual_regions output: ${{ steps.parse-regions.outputs.manual_regions }}"
+
+          echo "=== PARSE REGIONS STEP END ==="
 
       - name: Set environment variables dynamically
         id: set-env
