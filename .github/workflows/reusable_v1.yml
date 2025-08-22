@@ -97,8 +97,7 @@ jobs:
 
           echo "ENV=$ENV" >> $GITHUB_ENV
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
-          echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
-          echo "env=$ENV" >> $GITHUB_OUTPUT
+          echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_OUTPUT
 
       - name: Debug region parsing
         run: |
@@ -142,8 +141,63 @@ jobs:
           docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
           echo "image-uri=${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest" >> $GITHUB_OUTPUT
 
-  deploy-auto-regions:
+  push-to-all-regions:
     needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-central-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Push image to all target regions
+        run: |
+          # Get all regions (auto + manual)
+          ALL_REGIONS="${{ needs.build.outputs.auto_regions }}"
+          if [ -n "${{ needs.build.outputs.manual_regions }}" ]; then
+            ALL_REGIONS="$ALL_REGIONS,${{ needs.build.outputs.manual_regions }}"
+          fi
+
+          # Remove duplicates and split
+          ALL_REGIONS=$(echo "$ALL_REGIONS" | tr ',' '\n' | sort -u | tr '\n' ',' | sed 's/,$//')
+
+          echo "Pushing image to regions: $ALL_REGIONS"
+
+          # Get the image from eu-central-1
+          SOURCE_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          SERVICE_NAME="${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-${{ inputs.repository-name }}"
+
+          # Pull the image locally
+          docker pull $SOURCE_REGISTRY/${SERVICE_NAME}:latest
+
+          # Push to each region
+          IFS=',' read -ra REGIONS <<< "$ALL_REGIONS"
+          for region in "${REGIONS[@]}"; do
+            if [ "$region" != "eu-central-1" ]; then
+              echo "Pushing to region: $region"
+              
+              # Login to ECR in this region
+              aws ecr get-login-password --region $region | docker login --username AWS --password-stdin ${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-${{ inputs.repository-name }}.${{ needs.build.outputs.env }}.dkr.ecr.$region.amazonaws.com
+              
+              # Tag for this region
+              TARGET_REGISTRY="${{ needs.build.outputs.env }}-${{ inputs.brand-name }}-${{ inputs.repository-name }}.${{ needs.build.outputs.env }}.dkr.ecr.$region.amazonaws.com"
+              docker tag $SOURCE_REGISTRY/${SERVICE_NAME}:latest $TARGET_REGISTRY:latest
+              
+              # Push to this region
+              docker push $TARGET_REGISTRY:latest
+              
+              echo "✅ Successfully pushed to $region"
+            fi
+          done
+
+  deploy-auto-regions:
+    needs: [build, push-to-all-regions]
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials
@@ -173,9 +227,9 @@ jobs:
           done
 
   deploy-manual-regions:
-    needs: [build, deploy-auto-regions]
+    needs: [build, push-to-all-regions, deploy-auto-regions]
     runs-on: ubuntu-latest
-    if: contains(needs.build.outputs.manual-regions, ',') || (needs.build.outputs.manual-regions != '' && needs.build.outputs.manual-regions != 'null')
+    if: contains(needs.build.outputs.manual-regions, ',') || (needs.build.outputs.manual-regions != '' && needs.build.outputs.manual_regions != 'null')
     environment: manual-approval
     steps:
       - name: Wait for manual approval
@@ -203,7 +257,7 @@ jobs:
   notify-approval-required:
     needs: build
     runs-on: ubuntu-latest
-    if: contains(needs.build.outputs.manual-regions, ',') || (needs.build.outputs.manual-regions != '' && needs.build.outputs.manual-regions != 'null')
+    if: contains(needs.build.outputs.manual-regions, ',') || (needs.build.outputs.manual-regions != '' && needs.build.outputs.manual_regions != 'null')
     steps:
       - name: Notify manual approval required
         run: |
@@ -217,7 +271,8 @@ jobs:
           done
 
   deployment-summary:
-    needs: [build, deploy-auto-regions, deploy-manual-regions]
+    needs:
+      [build, push-to-all-regions, deploy-auto-regions, deploy-manual-regions]
     runs-on: ubuntu-latest
     if: always()
     outputs:
