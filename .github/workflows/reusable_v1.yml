@@ -117,6 +117,11 @@ jobs:
           echo "MANUAL_REGIONS: $MANUAL_REGIONS"
           echo "================================"
 
+          # Debug: show what's in GITHUB_ENV
+          echo "=== GITHUB_ENV CONTENTS ==="
+          cat $GITHUB_ENV
+          echo "==========================="
+
       - name: Debug region parsing
         run: |
           echo "Input auto-deploy-regions: ${{ inputs.auto-deploy-regions }}"
@@ -189,12 +194,11 @@ jobs:
       - name: Build, push and deploy to auto regions
         run: |
           echo "=== DEBUG INFO ==="
-          echo "Auto regions from build job: '${{ needs.build.outputs.auto_regions }}'"
-          echo "Auto regions length: ${#needs.build.outputs.auto_regions}"
-          echo "Auto regions type: $(echo "${{ needs.build.outputs.auto_regions }}" | wc -c)"
+          echo "Auto regions from inputs: '${{ inputs.auto-deploy-regions }}'"
+          echo "Auto regions length: ${#inputs.auto-deploy-regions}"
           echo "=================="
 
-          IFS=',' read -ra REGIONS <<< "${{ needs.build.outputs.auto_regions }}"
+          IFS=',' read -ra REGIONS <<< "${{ inputs.auto-deploy-regions }}"
           echo "Parsed regions array length: ${#REGIONS[@]}"
           echo "Regions array: ${REGIONS[*]}"
 
@@ -281,7 +285,15 @@ jobs:
 
       - name: Build, push and deploy to manual regions
         run: |
-          IFS=',' read -ra REGIONS <<< "${{ needs.build.outputs.manual_regions }}"
+          echo "=== DEBUG INFO ==="
+          echo "Manual regions from inputs: '${{ inputs.manual-deploy-regions }}'"
+          echo "Manual regions length: ${#inputs.manual-deploy-regions}"
+          echo "=================="
+
+          IFS=',' read -ra REGIONS <<< "${{ inputs.manual-deploy-regions }}"
+          echo "Parsed regions array length: ${#REGIONS[@]}"
+          echo "Regions array: ${REGIONS[*]}"
+
           for region in "${REGIONS[@]}"; do
             echo "Processing manual region: $region"
             
