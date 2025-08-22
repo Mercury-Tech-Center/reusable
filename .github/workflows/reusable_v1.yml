@@ -207,13 +207,18 @@ jobs:
             
             # Build image for this region
             echo "Building Docker image for $region"
-            docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest \
+            
+            # Use the same pattern as latest_reusable.yml
+            SERVICE_NAME="${{ inputs.branch-name }}-${{ inputs.brand-name }}-${{ inputs.repository-name }}"
+            IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest"
+            
+            docker build -t $IMAGE_URI \
               --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} \
               --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} .
             
             # Push to this region
             echo "Pushing image to $region"
-            docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
+            docker push $IMAGE_URI
             
             # Deploy to this region
             echo "Deploying to $region"
@@ -299,13 +304,18 @@ jobs:
             
             # Build image for this region
             echo "Building Docker image for $region"
-            docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest \
+            
+            # Use the same pattern as latest_reusable.yml
+            SERVICE_NAME="${{ inputs.branch-name }}-${{ inputs.brand-name }}-${{ inputs.repository-name }}"
+            IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest"
+            
+            docker build -t $IMAGE_URI \
               --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} \
               --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} .
             
             # Push to this region
             echo "Pushing image to $region"
-            docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
+            docker push $IMAGE_URI
             
             # Deploy to this region
             echo "Deploying to $region"
