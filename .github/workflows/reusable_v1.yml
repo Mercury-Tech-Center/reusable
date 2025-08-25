@@ -181,24 +181,6 @@ jobs:
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
           echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
-      - name: Debug ECR registry
-        run: |
-          echo "=== ECR DEBUG ==="
-          echo "ECR Registry from login step: '${{ steps.login-ecr.outputs.registry }}'"
-          echo "ECR Registry length: $(echo '${{ steps.login-ecr.outputs.registry }}' | wc -c)"
-          echo "=================="
-
       - name: Build, push and deploy to auto regions
         run: |
           echo "=== DEBUG INFO ==="
@@ -212,6 +194,13 @@ jobs:
 
           for region in "${REGIONS[@]}"; do
             echo "Processing auto region: $region"
+            
+            # Configure AWS credentials for this specific region
+            echo "Configuring AWS credentials for region: $region"
+            aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws configure set region $region
+            aws configure set output json
             
             # Login to ECR for this specific region
             echo "Logging into ECR for region: $region"
@@ -290,16 +279,6 @@ jobs:
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
           echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v1
-
       - name: Build, push and deploy to manual regions
         run: |
           echo "=== DEBUG INFO ==="
@@ -313,6 +292,13 @@ jobs:
 
           for region in "${REGIONS[@]}"; do
             echo "Processing manual region: $region"
+            
+            # Configure AWS credentials for this specific region
+            echo "Configuring AWS credentials for region: $region"
+            aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws configure set region $region
+            aws configure set output json
             
             # Login to ECR for this specific region
             echo "Logging into ECR for region: $region"
