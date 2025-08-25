@@ -185,7 +185,6 @@ jobs:
         run: |
           echo "=== DEBUG INFO ==="
           echo "Auto regions from inputs: '${{ inputs.auto-deploy-regions }}'"
-          echo "Auto regions length: $(echo '${{ inputs.auto-deploy-regions }}' | wc -c)"
           echo "=================="
 
           IFS=',' read -ra REGIONS <<< "${{ inputs.auto-deploy-regions }}"
@@ -202,16 +201,20 @@ jobs:
             aws configure set region $region
             aws configure set output json
             
+            # Get AWS account ID
+            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            echo "Using AWS Account ID: $ACCOUNT_ID"
+            
             # Login to ECR for this specific region
             echo "Logging into ECR for region: $region"
-            aws ecr get-login-password --region $region | docker login --username AWS --password-stdin $region.dkr.ecr.$region.amazonaws.com
+            aws ecr get-login-password --region $region | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$region.amazonaws.com
             
             # Build image for this region
             echo "Building Docker image for $region"
             
             # Use the same pattern as latest_reusable.yml
             SERVICE_NAME="${{ inputs.branch-name }}-${{ inputs.brand-name }}-${{ inputs.repository-name }}"
-            IMAGE_URI="$region.dkr.ecr.$region.amazonaws.com/${SERVICE_NAME}:latest"
+            IMAGE_URI="$ACCOUNT_ID.dkr.ecr.$region.amazonaws.com/${SERVICE_NAME}:latest"
             
             docker build -t $IMAGE_URI \
               --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} \
@@ -283,7 +286,6 @@ jobs:
         run: |
           echo "=== DEBUG INFO ==="
           echo "Manual regions from inputs: '${{ inputs.manual-deploy-regions }}'"
-          echo "Manual regions length: $(echo '${{ inputs.manual-deploy-regions }}' | wc -c)"
           echo "=================="
 
           IFS=',' read -ra REGIONS <<< "${{ inputs.manual-deploy-regions }}"
@@ -300,16 +302,20 @@ jobs:
             aws configure set region $region
             aws configure set output json
             
+            # Get AWS account ID
+            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            echo "Using AWS Account ID: $ACCOUNT_ID"
+            
             # Login to ECR for this specific region
             echo "Logging into ECR for region: $region"
-            aws ecr get-login-password --region $region | docker login --username AWS --password-stdin $region.dkr.ecr.$region.amazonaws.com
+            aws ecr get-login-password --region $region | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$region.amazonaws.com
             
             # Build image for this region
             echo "Building Docker image for $region"
             
             # Use the same pattern as latest_reusable.yml
             SERVICE_NAME="${{ inputs.branch-name }}-${{ inputs.brand-name }}-${{ inputs.repository-name }}"
-            IMAGE_URI="$region.dkr.ecr.$region.amazonaws.com/${SERVICE_NAME}:latest"
+            IMAGE_URI="$ACCOUNT_ID.dkr.ecr.$region.amazonaws.com/${SERVICE_NAME}:latest"
             
             docker build -t $IMAGE_URI \
               --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} \
