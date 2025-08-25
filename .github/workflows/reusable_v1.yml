@@ -213,10 +213,14 @@ jobs:
           for region in "${REGIONS[@]}"; do
             echo "Processing auto region: $region"
             
+            # Login to ECR for this specific region
+            echo "Logging into ECR for region: $region"
+            aws ecr get-login-password --region $region | docker login --username AWS --password-stdin $region.dkr.ecr.$region.amazonaws.com
+            
             # Build image for this region
             echo "Building Docker image for $region"
             
-
+            # Use the same pattern as latest_reusable.yml
             SERVICE_NAME="${{ inputs.branch-name }}-${{ inputs.brand-name }}-${{ inputs.repository-name }}"
             IMAGE_URI="$region.dkr.ecr.$region.amazonaws.com/${SERVICE_NAME}:latest"
             
@@ -309,6 +313,10 @@ jobs:
 
           for region in "${REGIONS[@]}"; do
             echo "Processing manual region: $region"
+            
+            # Login to ECR for this specific region
+            echo "Logging into ECR for region: $region"
+            aws ecr get-login-password --region $region | docker login --username AWS --password-stdin $region.dkr.ecr.$region.amazonaws.com
             
             # Build image for this region
             echo "Building Docker image for $region"
