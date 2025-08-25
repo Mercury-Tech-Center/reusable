@@ -216,9 +216,9 @@ jobs:
             # Build image for this region
             echo "Building Docker image for $region"
             
-            # Use the same pattern as latest_reusable.yml
+
             SERVICE_NAME="${{ inputs.branch-name }}-${{ inputs.brand-name }}-${{ inputs.repository-name }}"
-            IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest"
+            IMAGE_URI="$region.dkr.ecr.$region.amazonaws.com/${SERVICE_NAME}:latest"
             
             docker build -t $IMAGE_URI \
               --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} \
@@ -315,7 +315,7 @@ jobs:
             
             # Use the same pattern as latest_reusable.yml
             SERVICE_NAME="${{ inputs.branch-name }}-${{ inputs.brand-name }}-${{ inputs.repository-name }}"
-            IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest"
+            IMAGE_URI="$region.dkr.ecr.$region.amazonaws.com/${SERVICE_NAME}:latest"
             
             docker build -t $IMAGE_URI \
               --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} \
