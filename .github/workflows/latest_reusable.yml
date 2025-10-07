@@ -3,6 +3,9 @@ name: Reusable Workflow with Conditional Build Args
 on:
   workflow_call:
     inputs:
+      environment:
+        required: false
+        type: string    
       repo_name:
         required: true
         type: string
