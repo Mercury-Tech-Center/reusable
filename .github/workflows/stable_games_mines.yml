@@ -1,0 +1,198 @@
+name: Reusable ECS Deployment Workflow for Mines
+
+on:
+  workflow_call:
+    inputs:
+      is_monorepo:
+        required: true
+        type: boolean
+      app_name:
+        required: true
+        type: string
+        description: "NX project name used for building (e.g., 'aviator-api')"
+      ecr_repo_name:
+        required: true
+        type: string
+        description: "ECR repository name (e.g., 'stg-crush-api-mines')"
+      aws_region:
+        required: true
+        type: string
+      dr_aws_region:
+        required: false
+        type: string
+        default: ""
+      ecs_cluster_name:
+        required: true
+        type: string
+      ecs_service_name:
+        required: true
+        type: string
+        description: "ECS service name (e.g., 'staging-crush-aviator-api-mines')"
+      build_args:
+        required: false
+        type: string
+        default: ""
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+
+jobs:
+  build-and-push:
+    name: Build and push Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Retrieve AWS Account ID
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ACCOUNT_ID=$ACCOUNT_ID" >> "$GITHUB_ENV"
+
+      - name: Build and Push Docker Image
+        env:
+          IMAGE_TAG: latest
+        run: |
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
+          ECR_REPO="${{ inputs.ecr_repo_name }}"
+
+          echo "Building with APP_NAME=${{ inputs.app_name }}"
+          echo "Pushing to ECR repository: $ECR_REPO"
+
+          docker build -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" . --build-arg=APP_NAME="${{ inputs.app_name }}" ${{ inputs.build_args }}
+          docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+
+  deploy:
+    name: Deploy to ECS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Deploy to ECS
+        run: |
+          SERVICE_NAME="${{ inputs.ecs_service_name }}"
+          CLUSTER_NAME="${{ inputs.ecs_cluster_name }}"
+
+          echo "Deploying service: $SERVICE_NAME to cluster: $CLUSTER_NAME"
+          aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force-new-deployment
+
+  dr_prep_matrix:
+    name: Prepare DR matrix
+    runs-on: ubuntu-latest
+    outputs:
+      regions: ${{ steps.mk.outputs.regions }}
+      count: ${{ steps.mk.outputs.count }}
+    steps:
+      - id: mk
+        shell: bash
+        run: |
+          RAW="${{ inputs.dr_aws_region }}"
+          if [ -z "$RAW" ]; then
+            echo "regions=[]" >> "$GITHUB_OUTPUT"
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CLEAN=$(echo "$RAW" | tr -d ' ')
+          IFS=',' read -r -a parts <<< "$CLEAN"
+
+          JSON="["
+          for r in "${parts[@]}"; do
+            JSON="$JSON\"$r\","
+          done
+          JSON="${JSON%,}]"
+
+          echo "regions=$JSON" >> "$GITHUB_OUTPUT"
+          echo "count=${#parts[@]}" >> "$GITHUB_OUTPUT"
+
+  dr_build-and-push:
+    name: Build and push Docker image in DR regions
+    needs: dr_prep_matrix
+    if: needs.dr_prep_matrix.outputs.count != '0'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        region: ${{ fromJSON(needs.dr_prep_matrix.outputs.regions) }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (DR)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ matrix.region }}
+
+      - name: Log in to Amazon ECR (DR)
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Retrieve AWS Account ID (DR)
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ACCOUNT_ID=$ACCOUNT_ID" >> "$GITHUB_ENV"
+
+      - name: Build and Push Docker Image (DR)
+        env:
+          IMAGE_TAG: latest
+        run: |
+          ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ matrix.region }}.amazonaws.com"
+          ECR_REPO="${{ inputs.ecr_repo_name }}"
+
+          if aws ecr describe-repositories --repository-names "$ECR_REPO" --region "${{ matrix.region }}" >/dev/null 2>&1; then
+            echo "Building with APP_NAME=${{ inputs.app_name }} (DR)"
+            echo "Pushing to ECR repository: $ECR_REPO (DR)"
+
+            docker build -t "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" . --build-arg=APP_NAME="${{ inputs.app_name }}" ${{ inputs.build_args }}
+            docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+          else
+            echo "→ Repo '$ECR_REPO' not found in ${{ matrix.region }} — skipping"
+          fi
+
+  dr_deploy:
+    name: Deploy to ECS in DR regions
+    needs: [dr_prep_matrix, dr_build-and-push]
+    if: needs.dr_prep_matrix.outputs.count != '0'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        region: ${{ fromJSON(needs.dr_prep_matrix.outputs.regions) }}
+    steps:
+      - name: Configure AWS credentials (DR)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ matrix.region }}
+
+      - name: Deploy to ECS (DR)
+        run: |
+          SERVICE_NAME="${{ inputs.ecs_service_name }}"
+          CLUSTER_NAME="${{ inputs.ecs_cluster_name }}"
+
+          if aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --region "${{ matrix.region }}" >/dev/null 2>&1; then
+            echo "Deploying service: $SERVICE_NAME to cluster: $CLUSTER_NAME (DR)"
+            aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force-new-deployment --region "${{ matrix.region }}"
+          else
+            echo "→ Service '$SERVICE_NAME' not found in ${{ matrix.region }} — skipping"
+          fi
