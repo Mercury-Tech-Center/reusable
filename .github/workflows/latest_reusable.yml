@@ -42,7 +42,6 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: ${{ secrets.aws_role }}
-          role-session-name: AviatorGithub
           aws-region: 'eu-central-1'
 
       - name: Login to Amazon ECR
