@@ -32,11 +32,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
-    permissions:
-      id-token: write
-      contents: read
-      
     environment: ${{ inputs.environment }}
     steps:
       - name: Checkout code
@@ -44,7 +39,7 @@ jobs:
 
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v3
         with:
           role-to-assume: ${{ secrets.aws_role }}
           role-session-name: AviatorGithub
