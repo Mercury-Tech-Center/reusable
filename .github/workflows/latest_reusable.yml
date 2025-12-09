@@ -24,7 +24,7 @@ on:
         type: boolean
         default: false
     secrets:
-      aws-role:
+      aws_role:
         required: true
       dynamic_build_args:
         required: false
@@ -41,7 +41,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          role-to-assume: ${{ inputs.aws-role }}
+          role-to-assume: ${{ inputs.aws_role }}
           aws-region: 'eu-central-1'
 
       - name: Login to Amazon ECR
