@@ -32,6 +32,11 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+      
     environment: ${{ inputs.environment }}
     steps:
       - name: Checkout code
