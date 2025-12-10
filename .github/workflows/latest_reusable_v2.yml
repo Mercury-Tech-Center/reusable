@@ -26,6 +26,8 @@ on:
     secrets:
       aws_role:
         required: true
+      aws_region: 
+        required: true
       dynamic_build_args:
         required: false
 
