@@ -42,11 +42,13 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.aws_role }}
-          aws-region: 'eu-central-1'
+          aws-region: ${{ sectets.aws_region }}
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          mask-password: true
 
       - name: Build and Push Docker image
         run: |
