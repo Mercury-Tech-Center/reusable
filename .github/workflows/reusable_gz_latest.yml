@@ -1,0 +1,81 @@
+name: ECS Deploy
+
+on:
+  workflow_call:
+    inputs:
+      branch-name:
+        required: true
+        type: string
+      repository-name:
+        required: true
+        type: string
+      brand-name:
+        required: true
+        type: string
+    secrets:
+      aws_role:
+        required: true
+      NPM_TOKEN:
+        required: false
+      NPM_REGISTRY:
+        required: false
+        
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set environment variables dynamically
+        run: |
+          BRANCH_NAME="${{ inputs.branch-name }}"
+          REPOSITORY_NAME="${{ inputs.repository-name }}"
+          BRAND_NAME="${{ inputs.brand-name }}"
+          case "$BRANCH_NAME" in
+            "development")
+              ENV="dev"
+              CLUSTER_SUFFIX="dev"
+              ;;
+            "staging")
+              ENV="staging"
+              CLUSTER_SUFFIX="staging"
+              ;;
+            "production")
+              ENV="prod"
+              CLUSTER_SUFFIX="prod"
+              ;;
+            *)
+              echo "Unknown branch name: $BRANCH_NAME"
+              exit 1
+              ;;
+          esac
+          CLUSTER_NAME="${CLUSTER_SUFFIX}-gzavnili-cluster"
+          SERVICE_NAME="${CLUSTER_SUFFIX}-${REPOSITORY_NAME}"
+
+          echo "ENV=$ENV" >> $GITHUB_ENV
+          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
+          echo "SERVICE_NAME=$SERVICE_NAME" >> $GITHUB_ENV
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_role }}
+          aws-region: ${{ secrets.aws_region }}
+          
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push Docker image to Amazon ECR
+        
+        run: |
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest \
+            --build-arg NPM_REGISTRY=${{ secrets.NPM_REGISTRY }} \
+            --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} .
+          docker push ${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest
+
+
+      - name: Force new deployment in ECS
+        run: |
+          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment
