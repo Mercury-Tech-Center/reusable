@@ -1,0 +1,194 @@
+name: Unified Crush Deployment (OIDC)
+
+on:
+  workflow_call:
+    inputs:
+      is_monorepo:
+        description: 'Is this a monorepo?'
+        required: true
+        type: boolean
+      apps:
+        description: 'Application/service name to deploy'
+        required: true
+        type: string
+      github_repo:
+        description: 'GitHub repository name'
+        required: true
+        type: string
+      github_branch:
+        description: 'Branch to deploy'
+        required: true
+        type: string
+      aws_region:
+        description: 'AWS region for deployment'
+        required: true
+        type: string
+      dr_aws_region:
+        description: 'Disaster recovery AWS region'
+        required: false
+        type: string
+        default: ''
+      ecs_cluster_name:
+        description: 'ECS cluster name'
+        required: true
+        type: string
+      build_args:
+        description: 'Docker build arguments'
+        required: false
+        type: string
+        default: ''
+      service_suffix:
+        description: 'Service suffix (e.g., rgs1, rgs2)'
+        required: false
+        type: string
+        default: ''
+      role_session_name:
+        description: 'AWS role session name'
+        required: false
+        type: string
+        default: 'GithubActions-CrushDeployment'
+    secrets:
+      AWS_ROLE_ARN:
+        description: 'AWS IAM Role ARN for OIDC authentication'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/${{ inputs.github_repo }}
+          ref: ${{ inputs.github_branch }}
+
+      - name: Configure AWS Credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: ${{ inputs.role_session_name }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Determine Service Name
+        id: service-name
+        run: |
+          SERVICE_NAME="${{ inputs.apps }}"
+          if [ -n "${{ inputs.service_suffix }}" ]; then
+            SERVICE_NAME="${SERVICE_NAME}-${{ inputs.service_suffix }}"
+          fi
+          echo "service_name=$SERVICE_NAME" >> $GITHUB_OUTPUT
+          echo "Deploying service: $SERVICE_NAME"
+
+      - name: Set ECR Repository and ECS Service Names
+        id: naming
+        run: |
+          BRANCH="${{ inputs.github_branch }}"
+          SERVICE="${{ steps.service-name.outputs.service_name }}"
+          CLUSTER="${{ inputs.ecs_cluster_name }}"
+
+          ECR_REPOSITORY="${BRANCH}-${CLUSTER}-${SERVICE}"
+          ECS_SERVICE="${BRANCH}-${CLUSTER}-${SERVICE}"
+
+          echo "ecr_repository=$ECR_REPOSITORY" >> $GITHUB_OUTPUT
+          echo "ecs_service=$ECS_SERVICE" >> $GITHUB_OUTPUT
+
+          echo "ECR Repository: $ECR_REPOSITORY"
+          echo "ECS Service: $ECS_SERVICE"
+
+      - name: Create ECR Repository if Not Exists
+        run: |
+          aws ecr describe-repositories \
+            --repository-names "${{ steps.naming.outputs.ecr_repository }}" \
+            --region ${{ inputs.aws_region }} || \
+          aws ecr create-repository \
+            --repository-name "${{ steps.naming.outputs.ecr_repository }}" \
+            --region ${{ inputs.aws_region }}
+
+      - name: Build Docker Image
+        id: build-image
+        run: |
+          ACCOUNT_ID=$(echo "${{ steps.login-ecr.outputs.registry }}" | cut -d'.' -f1)
+          IMAGE_URI="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com/${{ steps.naming.outputs.ecr_repository }}"
+
+          if [ "${{ inputs.is_monorepo }}" == "true" ]; then
+            BUILD_CONTEXT="."
+            DOCKERFILE_PATH="./apps/${{ inputs.apps }}/Dockerfile"
+
+            if [ ! -f "$DOCKERFILE_PATH" ]; then
+              echo "Dockerfile not found at $DOCKERFILE_PATH, trying alternative locations..."
+              if [ -f "./${{ inputs.apps }}/Dockerfile" ]; then
+                DOCKERFILE_PATH="./${{ inputs.apps }}/Dockerfile"
+              elif [ -f "./Dockerfile" ]; then
+                DOCKERFILE_PATH="./Dockerfile"
+              else
+                echo "Error: Could not find Dockerfile"
+                exit 1
+              fi
+            fi
+          else
+            BUILD_CONTEXT="."
+            DOCKERFILE_PATH="./Dockerfile"
+          fi
+
+          echo "Building from context: $BUILD_CONTEXT"
+          echo "Using Dockerfile: $DOCKERFILE_PATH"
+
+          docker build \
+            -f "$DOCKERFILE_PATH" \
+            -t "$IMAGE_URI:latest" \
+            -t "$IMAGE_URI:${{ github.sha }}" \
+            ${{ inputs.build_args }} \
+            "$BUILD_CONTEXT"
+
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+
+      - name: Push Docker Image to ECR
+        run: |
+          docker push "${{ steps.build-image.outputs.image_uri }}:latest"
+          docker push "${{ steps.build-image.outputs.image_uri }}:${{ github.sha }}"
+
+          echo "Pushed images:"
+          echo "  - ${{ steps.build-image.outputs.image_uri }}:latest"
+          echo "  - ${{ steps.build-image.outputs.image_uri }}:${{ github.sha }}"
+
+      - name: Update ECS Service
+        run: |
+          echo "Updating ECS service: ${{ steps.naming.outputs.ecs_service }}"
+          echo "Cluster: ${{ inputs.ecs_cluster_name }}"
+          echo "Region: ${{ inputs.aws_region }}"
+
+          aws ecs update-service \
+            --cluster "${{ inputs.ecs_cluster_name }}" \
+            --service "${{ steps.naming.outputs.ecs_service }}" \
+            --force-new-deployment \
+            --region ${{ inputs.aws_region }}
+
+          echo "ECS service update initiated successfully"
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Service:** ${{ inputs.apps }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ inputs.github_branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Region:** ${{ inputs.aws_region }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Cluster:** ${{ inputs.ecs_cluster_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**ECR Repository:** ${{ steps.naming.outputs.ecr_repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "**ECS Service:** ${{ steps.naming.outputs.ecs_service }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** ${{ steps.build-image.outputs.image_uri }}:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+          if [ -n "${{ inputs.service_suffix }}" ]; then
+            echo "**Service Suffix:** ${{ inputs.service_suffix }}" >> $GITHUB_STEP_SUMMARY
+          fi
