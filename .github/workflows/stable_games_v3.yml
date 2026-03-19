@@ -33,7 +33,12 @@ on:
         required: false
         type: string
         default: ""
-        description: "Optional suffix to distinguish multiple instances (e.g., 'rtp2', '1', '2')"
+        description: "Optional suffix for both ECR repo and ECS service name (e.g., 'rtp2', '1', '2')"
+      ecs_service_suffix:
+        required: false
+        type: string
+        default: ""
+        description: "Optional suffix for ECS service name only — overrides service_suffix for ECS. Use when ECR repo and ECS service names differ."
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -116,9 +121,14 @@ jobs:
         if: ${{ inputs.is_monorepo }}
         run: |
           for app in ${{ inputs.apps }}; do
-            # Build service name with optional suffix
-            if [ -n "${{ inputs.service_suffix }}" ]; then
-              SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-"$app"-${{ inputs.service_suffix }}
+            # ECS service suffix: use ecs_service_suffix if set, otherwise fall back to service_suffix
+            ECS_SUFFIX="${{ inputs.ecs_service_suffix }}"
+            if [ -z "$ECS_SUFFIX" ]; then
+              ECS_SUFFIX="${{ inputs.service_suffix }}"
+            fi
+
+            if [ -n "$ECS_SUFFIX" ]; then
+              SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-"$app"-"$ECS_SUFFIX"
             else
               SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-"$app"
             fi
@@ -131,9 +141,13 @@ jobs:
       - name: Deploy to ECS for single repo
         if: ${{ !inputs.is_monorepo }}
         run: |
-          # Build service name with optional suffix
-          if [ -n "${{ inputs.service_suffix }}" ]; then
-            SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.github_repo }}-${{ inputs.service_suffix }}
+          ECS_SUFFIX="${{ inputs.ecs_service_suffix }}"
+          if [ -z "$ECS_SUFFIX" ]; then
+            ECS_SUFFIX="${{ inputs.service_suffix }}"
+          fi
+
+          if [ -n "$ECS_SUFFIX" ]; then
+            SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.github_repo }}-"$ECS_SUFFIX"
           else
             SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.github_repo }}
           fi
@@ -265,9 +279,13 @@ jobs:
         if: ${{ inputs.is_monorepo }}
         run: |
           for app in ${{ inputs.apps }}; do
-            # Build service name with optional suffix
-            if [ -n "${{ inputs.service_suffix }}" ]; then
-              SERVICE="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app-${{ inputs.service_suffix }}"
+            ECS_SUFFIX="${{ inputs.ecs_service_suffix }}"
+            if [ -z "$ECS_SUFFIX" ]; then
+              ECS_SUFFIX="${{ inputs.service_suffix }}"
+            fi
+
+            if [ -n "$ECS_SUFFIX" ]; then
+              SERVICE="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app-$ECS_SUFFIX"
             else
               SERVICE="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app"
             fi
@@ -284,9 +302,13 @@ jobs:
       - name: Deploy to ECS for single repo (DR)
         if: ${{ !inputs.is_monorepo }}
         run: |
-          # Build service name with optional suffix
-          if [ -n "${{ inputs.service_suffix }}" ]; then
-            SERVICE="${{ inputs.github_branch }}-${{ inputs.github_repo }}-${{ inputs.service_suffix }}"
+          ECS_SUFFIX="${{ inputs.ecs_service_suffix }}"
+          if [ -z "$ECS_SUFFIX" ]; then
+            ECS_SUFFIX="${{ inputs.service_suffix }}"
+          fi
+
+          if [ -n "$ECS_SUFFIX" ]; then
+            SERVICE="${{ inputs.github_branch }}-${{ inputs.github_repo }}-$ECS_SUFFIX"
           else
             SERVICE="${{ inputs.github_branch }}-${{ inputs.github_repo }}"
           fi
