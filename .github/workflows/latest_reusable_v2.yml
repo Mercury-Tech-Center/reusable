@@ -23,10 +23,6 @@ on:
         required: false
         type: boolean
         default: false
-      use_npm_token:
-        required: false
-        type: boolean
-        default: false
       
     secrets:
       aws_role:
@@ -34,6 +30,8 @@ on:
       aws_region: 
         required: true
       dynamic_build_args:
+        required: false
+      npm_token:
         required: false
 
 jobs:
@@ -63,8 +61,8 @@ jobs:
           IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${SERVICE_NAME}:latest"
           
           BUILD_ARGS=""
-          if [ "${{ inputs.use_npm_token }}" = "true" ]; then
-            BUILD_ARGS="--build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }}"
+          if [ -n "${{ secrets.npm_token }}" ]; then
+            BUILD_ARGS="--build-arg NPM_TOKEN=${{ secrets.npm_token }}"
           fi
           if [ "${{ inputs.use_build_args }}" = "true" ] && [ -n "${{ secrets.dynamic_build_args }}" ]; then
             BUILD_ARGS="$BUILD_ARGS ${{ secrets.dynamic_build_args }}"
