@@ -64,7 +64,7 @@ jobs:
           
           BUILD_ARGS=""
           if [ "${{ inputs.use_npm_token }}" = "true" ]; then
-            BUILD_ARGS="--build-arg NPM_TOKEN=${{ secrets.npm_token }}"
+            BUILD_ARGS="--build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }}"
           fi
           if [ "${{ inputs.use_build_args }}" = "true" ] && [ -n "${{ secrets.dynamic_build_args }}" ]; then
             BUILD_ARGS="$BUILD_ARGS ${{ secrets.dynamic_build_args }}"
