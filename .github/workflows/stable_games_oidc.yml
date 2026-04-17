@@ -32,15 +32,14 @@ on:
     secrets:
       AWS_ROLE:
         required: true
-      # AWS_ACCESS_KEY_ID:
-      #   required: true
-      # AWS_SECRET_ACCESS_KEY:
-      #   required: true
 
 jobs:
   build-and-push:
     name: Build and push Docker image
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -85,6 +84,9 @@ jobs:
     name: Deploy to ECS
     needs: build-and-push
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -111,6 +113,9 @@ jobs:
   dr_prep_matrix:
     name: Prepare DR matrix
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     outputs:
       regions: ${{ steps.mk.outputs.regions }}
       count: ${{ steps.mk.outputs.count }}
@@ -142,6 +147,9 @@ jobs:
     needs: dr_prep_matrix
     if: needs.dr_prep_matrix.outputs.count != '0'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -199,6 +207,9 @@ jobs:
     needs: [dr_prep_matrix, dr_build-and-push]
     if: needs.dr_prep_matrix.outputs.count != '0'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
