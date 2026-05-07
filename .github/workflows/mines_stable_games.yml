@@ -9,6 +9,10 @@ on:
       apps:
         required: false
         type: string
+      app_name:
+        required: false
+        type: string
+        default: ""
       aws_region:
         required: true
         type: string
