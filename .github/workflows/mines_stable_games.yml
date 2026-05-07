@@ -70,11 +70,16 @@ jobs:
 
           for app in ${{ inputs.apps }}; do
             SERVICE_NAME="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app"
+            BUILD_APP_NAME="${{ inputs.app_name }}"
+
+            if [ -z "$BUILD_APP_NAME" ]; then
+              BUILD_APP_NAME="$app"
+            fi
 
             docker build \
               -t "$ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG" \
               . \
-              --build-arg=APP_NAME="$app"
+              --build-arg=APP_NAME="$BUILD_APP_NAME"
 
             docker push "$ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG"
           done
@@ -194,9 +199,14 @@ jobs:
 
           for app in ${{ inputs.apps }}; do
             SERVICE="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app"
+            BUILD_APP_NAME="${{ inputs.app_name }}"
+
+            if [ -z "$BUILD_APP_NAME" ]; then
+              BUILD_APP_NAME="$app"
+            fi
 
             if aws ecr describe-repositories --repository-names "$SERVICE" --region "${{ matrix.region }}" >/dev/null 2>&1; then
-              docker build -t "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG" . --build-arg=APP_NAME="$app"
+              docker build -t "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG" . --build-arg=APP_NAME="$BUILD_APP_NAME"
               docker push "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG"
             else
               echo "Repo '$SERVICE' not found in ${{ matrix.region }} — skipping"
