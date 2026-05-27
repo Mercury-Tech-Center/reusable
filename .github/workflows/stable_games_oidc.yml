@@ -29,6 +29,16 @@ on:
       github_branch:
         required: true
         type: string
+      service_suffix:
+        required: false
+        type: string
+        default: ""
+        description: "Optional suffix for both ECR repo and ECS service name (e.g., 'rtp2', '1', '2')"
+      ecs_service_suffix:
+        required: false
+        type: string
+        default: ""
+        description: "Optional suffix for ECS service name only — overrides service_suffix for ECS. Use when ECR repo and ECS service names differ."
     secrets:
       AWS_ROLE:
         required: true
@@ -65,7 +75,14 @@ jobs:
         run: |
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
           for app in ${{ inputs.apps }}; do
-            SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-"$app"
+            # Build service name with optional suffix
+            if [ -n "${{ inputs.service_suffix }}" ]; then
+              SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-"$app"-${{ inputs.service_suffix }}
+            else
+              SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-"$app"
+            fi
+
+            echo "Building and pushing: $SERVICE_NAME"
             docker build -t "$ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG" . --build-arg=APP_NAME="$app"
             docker push    "$ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG"
           done
@@ -74,9 +91,17 @@ jobs:
         if: ${{ !inputs.is_monorepo }}
         env:
           IMAGE_TAG: latest
-          SERVICE_NAME: ${{ inputs.github_branch }}-${{ inputs.github_repo }}
         run: |
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com"
+
+          # Build service name with optional suffix
+          if [ -n "${{ inputs.service_suffix }}" ]; then
+            SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.github_repo }}-${{ inputs.service_suffix }}
+          else
+            SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.github_repo }}
+          fi
+
+          echo "Building and pushing: $SERVICE_NAME"
           docker build ${{ inputs.build_args }} -t "$ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG" .
           docker push    "$ECR_REGISTRY/$SERVICE_NAME:$IMAGE_TAG"
 
@@ -98,16 +123,39 @@ jobs:
         if: ${{ inputs.is_monorepo }}
         run: |
           for app in ${{ inputs.apps }}; do
-            SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-"$app"
+            # ECS service suffix: use ecs_service_suffix if set, otherwise fall back to service_suffix
+            ECS_SUFFIX="${{ inputs.ecs_service_suffix }}"
+            if [ -z "$ECS_SUFFIX" ]; then
+              ECS_SUFFIX="${{ inputs.service_suffix }}"
+            fi
+
+            if [ -n "$ECS_SUFFIX" ]; then
+              SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-"$app"-"$ECS_SUFFIX"
+            else
+              SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-"$app"
+            fi
+
             CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+            echo "Deploying: $SERVICE_NAME to cluster: $CLUSTER_NAME"
             aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force-new-deployment
           done
 
       - name: Deploy to ECS for single repo
         if: ${{ !inputs.is_monorepo }}
         run: |
-          SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.github_repo }}
+          ECS_SUFFIX="${{ inputs.ecs_service_suffix }}"
+          if [ -z "$ECS_SUFFIX" ]; then
+            ECS_SUFFIX="${{ inputs.service_suffix }}"
+          fi
+
+          if [ -n "$ECS_SUFFIX" ]; then
+            SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.github_repo }}-"$ECS_SUFFIX"
+          else
+            SERVICE_NAME=${{ inputs.github_branch }}-${{ inputs.github_repo }}
+          fi
+
           CLUSTER_NAME=${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster
+          echo "Deploying: $SERVICE_NAME to cluster: $CLUSTER_NAME"
           aws ecs update-service --cluster "$CLUSTER_NAME" --service "$SERVICE_NAME" --force-new-deployment
 
   dr_prep_matrix:
@@ -162,7 +210,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
-          aws-region: ${{ inputs.aws_region }}
+          aws-region: ${{ matrix.region }}
 
       - name: Log in to Amazon ECR (DR)
         uses: aws-actions/amazon-ecr-login@v2
@@ -179,8 +227,15 @@ jobs:
         run: |
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ matrix.region }}.amazonaws.com"
           for app in ${{ inputs.apps }}; do
-            SERVICE="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app"
+            # Build service name with optional suffix
+            if [ -n "${{ inputs.service_suffix }}" ]; then
+              SERVICE="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app-${{ inputs.service_suffix }}"
+            else
+              SERVICE="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app"
+            fi
+
             if aws ecr describe-repositories --repository-names "$SERVICE" --region "${{ matrix.region }}" >/dev/null 2>&1; then
+              echo "Building and pushing: $SERVICE (DR)"
               docker build -t "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG" . --build-arg=APP_NAME="$app"
               docker push    "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG"
             else
@@ -194,8 +249,16 @@ jobs:
           IMAGE_TAG: latest
         run: |
           ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.${{ matrix.region }}.amazonaws.com"
-          SERVICE="${{ inputs.github_branch }}-${{ inputs.github_repo }}"
+
+          # Build service name with optional suffix
+          if [ -n "${{ inputs.service_suffix }}" ]; then
+            SERVICE="${{ inputs.github_branch }}-${{ inputs.github_repo }}-${{ inputs.service_suffix }}"
+          else
+            SERVICE="${{ inputs.github_branch }}-${{ inputs.github_repo }}"
+          fi
+
           if aws ecr describe-repositories --repository-names "$SERVICE" --region "${{ matrix.region }}" >/dev/null 2>&1; then
+            echo "Building and pushing: $SERVICE (DR)"
             docker build ${{ inputs.build_args }} -t "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG" .
             docker push    "$ECR_REGISTRY/$SERVICE:$IMAGE_TAG"
           else
@@ -219,15 +282,26 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
-          aws-region: ${{ inputs.aws_region }}
+          aws-region: ${{ matrix.region }}
 
       - name: Deploy to ECS for monorepo (DR)
         if: ${{ inputs.is_monorepo }}
         run: |
           for app in ${{ inputs.apps }}; do
-            SERVICE="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app"
+            ECS_SUFFIX="${{ inputs.ecs_service_suffix }}"
+            if [ -z "$ECS_SUFFIX" ]; then
+              ECS_SUFFIX="${{ inputs.service_suffix }}"
+            fi
+
+            if [ -n "$ECS_SUFFIX" ]; then
+              SERVICE="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app-$ECS_SUFFIX"
+            else
+              SERVICE="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-$app"
+            fi
+
             CLUSTER="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster"
             if aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --region "${{ matrix.region }}" >/dev/null 2>&1; then
+              echo "Deploying: $SERVICE to cluster: $CLUSTER (DR)"
               aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment --region "${{ matrix.region }}"
             else
               echo "→ Service '$SERVICE' not found in ${{ matrix.region }} — skipping"
@@ -237,9 +311,20 @@ jobs:
       - name: Deploy to ECS for single repo (DR)
         if: ${{ !inputs.is_monorepo }}
         run: |
-          SERVICE="${{ inputs.github_branch }}-${{ inputs.github_repo }}"
+          ECS_SUFFIX="${{ inputs.ecs_service_suffix }}"
+          if [ -z "$ECS_SUFFIX" ]; then
+            ECS_SUFFIX="${{ inputs.service_suffix }}"
+          fi
+
+          if [ -n "$ECS_SUFFIX" ]; then
+            SERVICE="${{ inputs.github_branch }}-${{ inputs.github_repo }}-$ECS_SUFFIX"
+          else
+            SERVICE="${{ inputs.github_branch }}-${{ inputs.github_repo }}"
+          fi
+
           CLUSTER="${{ inputs.github_branch }}-${{ inputs.ecs_cluster_name }}-aviator-cluster"
           if aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --region "${{ matrix.region }}" >/dev/null 2>&1; then
+            echo "Deploying: $SERVICE to cluster: $CLUSTER (DR)"
             aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment --region "${{ matrix.region }}"
           else
             echo "→ Service '$SERVICE' not found in ${{ matrix.region }} — skipping"
